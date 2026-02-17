@@ -382,7 +382,7 @@ function Dashboard() {
                   className="grid h-8 w-8 place-items-center rounded-full bg-[rgba(219,221,228,0.72)] text-[20px] leading-none text-[#5f6269] transition-colors duration-200 hover:bg-[rgba(199,202,212,0.9)]"
                   aria-label="Close editor"
                 >
-                  X
+                  x
                 </button>
               </div>
 
