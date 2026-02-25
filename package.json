@@ -2,12 +2,32 @@
   "name": "noteslite",
   "version": "1.0.0",
   "private": true,
-  "description": "Monorepo root for frontend and backend apps",
   "scripts": {
-    "dev:frontend": "npm --prefix frontend run dev",
-    "dev:backend": "npm --prefix backend run dev",
-    "build:frontend": "npm --prefix frontend run build",
-    "start:backend": "npm --prefix backend run start",
-    "install:all": "npm --prefix frontend install && npm --prefix backend install"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "postinstall": "prisma generate"
+  },
+  "dependencies": {
+    "@clerk/nextjs": "^6.38.2",
+    "@prisma/client": "^6.4.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.575.0",
+    "next": "^16.1.6",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "tailwind-merge": "^3.5.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.2.1",
+    "@types/node": "^25.3.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "autoprefixer": "^10.4.27",
+    "postcss": "^8.5.6",
+    "prisma": "^6.4.1",
+    "tailwindcss": "^4.2.1",
+    "typescript": "^5.9.3"
   }
 }

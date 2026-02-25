@@ -1,0 +1,98 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         String      @id @default(uuid())
+  clerk_id   String      @unique
+  email      String      @unique
+  name       String
+  created_at DateTime    @default(now())
+  workspaces Workspace[]
+
+  @@map("users")
+}
+
+model Workspace {
+  id          String       @id @default(uuid())
+  name        String
+  theme       String?
+  user_id     String
+  created_at  DateTime     @default(now())
+  user        User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  columns     Column[]
+  cards       Card[]
+  tags        Tag[]
+  connections Connection[]
+
+  @@map("workspaces")
+}
+
+model Column {
+  id           String    @id @default(uuid())
+  name         String
+  order_index  Int
+  workspace_id String
+  workspace    Workspace @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  cards        Card[]
+
+  @@map("columns")
+}
+
+model Card {
+  id             String      @id @default(uuid())
+  title          String
+  content        Json?
+  cover_image    String?
+  position_x     Float       @default(0)
+  position_y     Float       @default(0)
+  column_id      String?
+  workspace_id   String
+  created_at     DateTime    @default(now())
+  updated_at     DateTime    @updatedAt
+  column         Column?     @relation(fields: [column_id], references: [id], onDelete: SetNull)
+  workspace      Workspace   @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  tags           CardTag[]
+  sourceConns    Connection[] @relation("SourceCard")
+  targetConns    Connection[] @relation("TargetCard")
+
+  @@map("cards")
+}
+
+model Tag {
+  id           String      @id @default(uuid())
+  name         String
+  color        String?
+  workspace_id String
+  workspace    Workspace   @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  cards        CardTag[]
+
+  @@map("tags")
+}
+
+model CardTag {
+  card_id String
+  tag_id  String
+  card    Card   @relation(fields: [card_id], references: [id], onDelete: Cascade)
+  tag     Tag    @relation(fields: [tag_id], references: [id], onDelete: Cascade)
+
+  @@id([card_id, tag_id])
+  @@map("card_tags")
+}
+
+model Connection {
+  id             String    @id @default(uuid())
+  source_card_id String
+  target_card_id String
+  workspace_id   String
+  source_card    Card      @relation("SourceCard", fields: [source_card_id], references: [id], onDelete: Cascade)
+  target_card    Card      @relation("TargetCard", fields: [target_card_id], references: [id], onDelete: Cascade)
+  workspace      Workspace @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+
+  @@map("connections")
+}
