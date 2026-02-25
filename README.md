@@ -1,46 +1,49 @@
-# NOTESLITES
+# NOTESLITE (Next.js + Prisma + PostgreSQL)
 
-Project split into two apps:
+This project has been migrated from a split `Vite + Express` setup to a single:
 
-- `frontend`: React + Vite app
-- `backend`: Node.js + Express API
+- Next.js (App Router)
+- React + TypeScript
+- Prisma ORM
+- PostgreSQL
 
-## Structure
+## Getting Started
 
-```text
-noteslite/
-  frontend/
-  backend/
-```
-
-## Run From Root
-
-Install dependencies for both apps:
+1. Install dependencies:
 
 ```bash
-npm run install:all
+npm install
 ```
 
-Run frontend:
+2. Create your environment file:
 
 ```bash
-npm run dev:frontend
+cp .env.example .env
 ```
 
-Run backend:
+3. Update `.env` with your PostgreSQL connection and JWT secret.
+
+4. Run Prisma migration:
 
 ```bash
-npm run dev:backend
+npm run prisma:migrate -- --name init
 ```
 
-Build frontend:
+5. Start the app:
 
 ```bash
-npm run build:frontend
+npm run dev
 ```
 
-Start backend (non-watch mode):
+Open `http://localhost:3000`.
 
-```bash
-npm run start:backend
-```
+## Key Paths
+
+- `app/` - Next.js pages and API routes
+- `components/` - client UI components
+- `lib/` - shared server utilities (auth/session/prisma)
+- `prisma/schema.prisma` - database schema
+
+## Notes
+
+- Legacy `frontend/` and `backend/` folders are still present for reference but are no longer used by the app runtime.

@@ -1,0 +1,40 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum BackgroundMode {
+  image
+  color
+  gradient
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  boards       Board[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Board {
+  id              String         @id @default(cuid())
+  title           String
+  image           String?
+  backgroundMode  BackgroundMode @default(image)
+  backgroundColor String         @default("#cfd2d9")
+  gradientFrom    String         @default("#d6deec")
+  gradientTo      String         @default("#aeb6c8")
+  userId          String
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([userId])
+}

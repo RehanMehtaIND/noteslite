@@ -1,4 +1,13 @@
-# Logs
+# dependencies
+node_modules
+
+# build output
+.next
+out
+dist
+dist-ssr
+
+# logs
 logs
 *.log
 npm-debug.log*
@@ -7,16 +16,22 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# env
+.env
+.env.local
+.env.*.local
 
-# Editor directories and files
+# prisma
+prisma/dev.db
+
+# misc
+*.local
+.DS_Store
+
+# editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj

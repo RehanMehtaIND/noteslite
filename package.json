@@ -1,13 +1,35 @@
 {
   "name": "noteslite",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "Monorepo root for frontend and backend apps",
+  "description": "NOTESLITE migrated to Next.js + Prisma + PostgreSQL",
   "scripts": {
-    "dev:frontend": "npm --prefix frontend run dev",
-    "dev:backend": "npm --prefix backend run dev",
-    "build:frontend": "npm --prefix frontend run build",
-    "start:backend": "npm --prefix backend run start",
-    "install:all": "npm --prefix frontend install && npm --prefix backend install"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.4.1",
+    "bcryptjs": "^3.0.2",
+    "jose": "^5.9.6",
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
+    "@types/node": "^22.10.1",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "eslint": "^9.17.0",
+    "eslint-config-next": "^15.1.0",
+    "prisma": "^6.4.1",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.2"
   }
 }
