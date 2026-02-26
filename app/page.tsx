@@ -1,11 +1,13 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import Auth from "@/components/auth";
+import { getCurrentUser } from "@/lib/auth";
 
-export default function Home() {
-    return (
-        <div className="w-full min-h-screen">
-            <Auth />
-        </div>
-    );
+export default async function HomePage() {
+  const user = await getCurrentUser();
+
+  if (user) {
+    redirect("/dashboard");
+  }
+
+  redirect("/auth");
 }
