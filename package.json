@@ -13,9 +13,8 @@
     "prisma:studio": "prisma studio"
   },
   "dependencies": {
+    "@clerk/nextjs": "^6.38.3",
     "@prisma/client": "^6.4.1",
-    "bcryptjs": "^3.0.2",
-    "jose": "^5.9.6",
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

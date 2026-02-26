@@ -1,35 +1,50 @@
-import { cookies } from "next/headers";
+import { auth, currentUser } from "@clerk/nextjs/server";
 
 import { prisma } from "@/lib/prisma";
-import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
 export type AuthenticatedUser = {
   id: string;
+  clerkId: string;
   name: string;
   email: string;
 };
 
+/**
+ * Get the current authenticated user from Clerk and resolve their DB record.
+ * Creates the user row on first sign‑in (just‑in‑time provisioning).
+ */
 export async function getCurrentUser(): Promise<AuthenticatedUser | null> {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+  const { userId: clerkId } = await auth();
 
-  if (!token) {
+  if (!clerkId) {
     return null;
   }
 
-  const payload = await verifySessionToken(token);
-
-  if (!payload?.sub) {
-    return null;
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { id: payload.sub },
-    select: { id: true, name: true, email: true },
+  // Try to find existing DB user
+  let user = await prisma.user.findUnique({
+    where: { clerkId },
+    select: { id: true, clerkId: true, name: true, email: true },
   });
 
   if (!user) {
-    return null;
+    // First sign‑in — provision user from Clerk profile
+    const clerkUser = await currentUser();
+
+    if (!clerkUser) {
+      return null;
+    }
+
+    user = await prisma.user.create({
+      data: {
+        clerkId,
+        email:
+          clerkUser.emailAddresses[0]?.emailAddress ?? `${clerkId}@placeholder.local`,
+        name:
+          [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ") ||
+          "User",
+      },
+      select: { id: true, clerkId: true, name: true, email: true },
+    });
   }
 
   return user;

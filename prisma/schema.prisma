@@ -7,34 +7,102 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum BackgroundMode {
-  image
-  color
-  gradient
-}
+// ─── Users ───────────────────────────────────────────────────────────────────
 
 model User {
-  id           String   @id @default(cuid())
-  name         String
-  email        String   @unique
-  passwordHash String
-  boards       Board[]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id         String      @id @default(uuid()) @db.Uuid
+  clerkId    String      @unique @map("clerk_id")
+  email      String      @unique
+  name       String
+  createdAt  DateTime    @default(now()) @map("created_at")
+  workspaces Workspace[]
+
+  @@map("users")
 }
 
-model Board {
-  id              String         @id @default(cuid())
-  title           String
-  image           String?
-  backgroundMode  BackgroundMode @default(image)
-  backgroundColor String         @default("#cfd2d9")
-  gradientFrom    String         @default("#d6deec")
-  gradientTo      String         @default("#aeb6c8")
-  userId          String
-  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+// ─── Workspaces ──────────────────────────────────────────────────────────────
+
+model Workspace {
+  id          String       @id @default(uuid()) @db.Uuid
+  name        String
+  theme       String       @default("default")
+  userId      String       @map("user_id") @db.Uuid
+  createdAt   DateTime     @default(now()) @map("created_at")
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  columns     Column[]
+  cards       Card[]
+  tags        Tag[]
+  connections Connection[]
 
   @@index([userId])
+  @@map("workspaces")
+}
+
+// ─── Columns ─────────────────────────────────────────────────────────────────
+
+model Column {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String
+  orderIndex  Int       @map("order_index")
+  workspaceId String    @map("workspace_id") @db.Uuid
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  cards       Card[]
+
+  @@index([workspaceId])
+  @@map("columns")
+}
+
+// ─── Cards ───────────────────────────────────────────────────────────────────
+
+model Card {
+  id                String       @id @default(uuid()) @db.Uuid
+  title             String
+  content           Json?
+  coverImage        String?      @map("cover_image")
+  positionX         Float        @default(0) @map("position_x")
+  positionY         Float        @default(0) @map("position_y")
+  columnId          String?      @map("column_id") @db.Uuid
+  workspaceId       String       @map("workspace_id") @db.Uuid
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+  column            Column?      @relation(fields: [columnId], references: [id], onDelete: SetNull)
+  workspace         Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  tags              Tag[]        @relation("CardTags")
+  sourceConnections Connection[] @relation("SourceCard")
+  targetConnections Connection[] @relation("TargetCard")
+
+  @@index([workspaceId])
+  @@index([columnId])
+  @@map("cards")
+}
+
+// ─── Tags ────────────────────────────────────────────────────────────────────
+
+model Tag {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String
+  color       String
+  workspaceId String    @map("workspace_id") @db.Uuid
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  cards       Card[]    @relation("CardTags")
+
+  @@index([workspaceId])
+  @@map("tags")
+}
+
+// ─── Connections ─────────────────────────────────────────────────────────────
+
+model Connection {
+  id           String    @id @default(uuid()) @db.Uuid
+  sourceCardId String    @map("source_card_id") @db.Uuid
+  targetCardId String    @map("target_card_id") @db.Uuid
+  workspaceId  String    @map("workspace_id") @db.Uuid
+  sourceCard   Card      @relation("SourceCard", fields: [sourceCardId], references: [id], onDelete: Cascade)
+  targetCard   Card      @relation("TargetCard", fields: [targetCardId], references: [id], onDelete: Cascade)
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([sourceCardId])
+  @@index([targetCardId])
+  @@map("connections")
 }

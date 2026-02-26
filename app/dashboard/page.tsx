@@ -10,5 +10,5 @@ export default async function DashboardPage() {
     redirect("/auth");
   }
 
-  return <DashboardClient userName={user.name} />;
+  return <DashboardClient userName={user.name} userId={user.id} />;
 }
