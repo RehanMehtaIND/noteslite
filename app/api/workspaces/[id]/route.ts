@@ -11,7 +11,7 @@ type RouteContext = {
 const updateWorkspaceSchema = z
   .object({
     name: z.string().trim().min(1).max(120).optional(),
-    theme: z.string().trim().max(40).optional(),
+    theme: z.string().trim().max(2048).optional(),
   })
   .refine((v) => Object.keys(v).length > 0, {
     message: "No updates provided.",

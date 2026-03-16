@@ -21,7 +21,15 @@ npm install
 cp .env.example .env
 ```
 
-3. Update `.env` with your PostgreSQL connection and JWT secret.
+3. Update `.env` with your PostgreSQL and Clerk values:
+
+- `DATABASE_URL`
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+- `CLERK_SECRET_KEY`
+- `NEXT_PUBLIC_CLERK_SIGN_IN_URL` (use `/auth/sign-in`)
+- `NEXT_PUBLIC_CLERK_SIGN_UP_URL` (use `/auth/sign-up`)
+- `NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL` (use `/dashboard`)
+- `NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL` (use `/dashboard`)
 
 4. Run Prisma migration:
 
@@ -41,8 +49,16 @@ Open `http://localhost:3000`.
 
 - `app/` - Next.js pages and API routes
 - `components/` - client UI components
-- `lib/` - shared server utilities (auth/session/prisma)
+- `lib/` - shared server utilities (Clerk auth/prisma)
 - `prisma/schema.prisma` - database schema
+
+## Authentication
+
+- Clerk is configured in `app/layout.tsx` with `ClerkProvider`.
+- Protected routes are enforced in `middleware.ts`.
+- Sign in: `/auth/sign-in`
+- Sign up: `/auth/sign-up`
+- `/auth` redirects to `/auth/sign-in`.
 
 ## Notes
 
