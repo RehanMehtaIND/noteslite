@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 
 const createWorkspaceSchema = z.object({
   name: z.string().trim().min(1).max(120),
-  theme: z.string().trim().max(40).optional(),
+  theme: z.string().trim().max(2048).optional(),
 });
 
 export async function GET() {

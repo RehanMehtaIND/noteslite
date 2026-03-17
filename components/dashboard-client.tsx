@@ -19,6 +19,7 @@ type WorkspaceItem = {
 };
 
 type WorkspaceUpdate = Partial<Pick<WorkspaceItem, "name" | "theme">>;
+type ThemeEditorMode = "preset" | "color" | "gradient" | "image";
 
 const BASE_WIDTH = 1600;
 const BASE_HEIGHT = 980;
@@ -51,15 +52,102 @@ const THEME_COLORS: Record<string, string> = {
   sand: "#d4caa8",
 };
 
+const DEFAULT_GRADIENT = "linear-gradient(135deg, #a8c4d4 0%, #c4a8d4 100%)";
+const HEX_COLOR_PATTERN = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+const GRADIENT_PATTERN = /^(linear-gradient|radial-gradient|conic-gradient)\(.+\)$/i;
+
+const GRADIENT_PRESETS = [
+  { label: "Dusk",   a: "#a8c4d4", b: "#c4a8d4", angle: 135 },
+  { label: "Mint",   a: "#a8d4bb", b: "#a8c4d4", angle: 135 },
+  { label: "Coral",  a: "#d4a8a8", b: "#d4c4a8", angle: 120 },
+  { label: "Sunset", a: "#d4b8a8", b: "#d4a8bb", angle: 45  },
+  { label: "Storm",  a: "#8fa3be", b: "#6b7994", angle: 160 },
+  { label: "Bloom",  a: "#d4a8bb", b: "#c9a8d4", angle: 110 },
+] as const;
+
+function buildGradient(angle: number, a: string, b: string) {
+  return `linear-gradient(${angle}deg, ${a} 0%, ${b} 100%)`;
+}
+
+function parseLinearGradient(css: string): { angle: number; a: string; b: string } | null {
+  const match = /linear-gradient\(\s*(\d+)deg,\s*(#[0-9a-fA-F]{3,6})\s+0%,\s*(#[0-9a-fA-F]{3,6})\s+100%\)/i.exec(css);
+  if (!match) return null;
+  return { angle: parseInt(match[1], 10), a: match[2], b: match[3] };
+}
+
+function parseTheme(theme: string): { mode: ThemeEditorMode; value: string } {
+  if (theme in THEME_COLORS) {
+    return { mode: "preset", value: theme };
+  }
+
+  if (theme.startsWith("color:")) {
+    return { mode: "color", value: theme.slice("color:".length) };
+  }
+
+  if (theme.startsWith("gradient:")) {
+    return { mode: "gradient", value: theme.slice("gradient:".length) };
+  }
+
+  if (theme.startsWith("image:")) {
+    return { mode: "image", value: theme.slice("image:".length) };
+  }
+
+  if (GRADIENT_PATTERN.test(theme)) {
+    return { mode: "gradient", value: theme };
+  }
+
+  if (/^https?:\/\//i.test(theme)) {
+    return { mode: "image", value: theme };
+  }
+
+  return { mode: "color", value: theme };
+}
+
+function isValidImageUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 function getThemeBackground(theme: string): CSSProperties {
-  return { backgroundColor: THEME_COLORS[theme] ?? THEME_COLORS.default };
+  const parsed = parseTheme(theme);
+
+  if (parsed.mode === "preset") {
+    return { backgroundColor: THEME_COLORS[parsed.value] ?? THEME_COLORS.default };
+  }
+
+  if (parsed.mode === "color") {
+    return { backgroundColor: HEX_COLOR_PATTERN.test(parsed.value) ? parsed.value : THEME_COLORS.default };
+  }
+
+  if (parsed.mode === "gradient") {
+    return {
+      backgroundColor: THEME_COLORS.default,
+      backgroundImage: GRADIENT_PATTERN.test(parsed.value) ? parsed.value : DEFAULT_GRADIENT,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+    };
+  }
+
+  if (parsed.mode === "image" && isValidImageUrl(parsed.value)) {
+    return {
+      backgroundColor: THEME_COLORS.default,
+      backgroundImage: `linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.14) 100%), url("${parsed.value}")`,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+    };
+  }
+
+  return { backgroundColor: THEME_COLORS.default };
 }
 
 export default function DashboardClient({
   userName,
 }: {
   userName: string;
-  userId: string;
 }) {
   const router = useRouter();
   const { signOut } = useClerk();
@@ -70,6 +158,12 @@ export default function DashboardClient({
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [themeEditorMode, setThemeEditorMode] = useState<ThemeEditorMode>("preset");
+  const [customColor, setCustomColor] = useState(THEME_COLORS.default);
+  const [gradientStopA, setGradientStopA] = useState("#a8c4d4");
+  const [gradientStopB, setGradientStopB] = useState("#c4a8d4");
+  const [gradientAngle, setGradientAngle] = useState(135);
+  const [imageUrl, setImageUrl] = useState("");
 
   const editingWorkspace = useMemo(
     () => workspaces.find((w) => w.id === editingId) ?? null,
@@ -152,6 +246,41 @@ export default function DashboardClient({
     void loadWorkspaces();
   }, [loadWorkspaces]);
 
+  useEffect(() => {
+    if (!editingWorkspace) {
+      return;
+    }
+
+    const parsed = parseTheme(editingWorkspace.theme);
+    setThemeEditorMode(parsed.mode);
+
+    if (parsed.mode === "preset") {
+      setCustomColor(THEME_COLORS.default);
+      setGradientStopA("#a8c4d4");
+      setGradientStopB("#c4a8d4");
+      setGradientAngle(135);
+      setImageUrl("");
+      return;
+    }
+
+    if (parsed.mode === "color") {
+      setCustomColor(HEX_COLOR_PATTERN.test(parsed.value) ? parsed.value : THEME_COLORS.default);
+      return;
+    }
+
+    if (parsed.mode === "gradient") {
+      const parts = parseLinearGradient(parsed.value);
+      if (parts) {
+        setGradientAngle(parts.angle);
+        setGradientStopA(parts.a);
+        setGradientStopB(parts.b);
+      }
+      return;
+    }
+
+    setImageUrl(parsed.value);
+  }, [editingWorkspace]);
+
   const deleteWorkspace = async () => {
     if (!editingWorkspace) return;
     const id = editingWorkspace.id;
@@ -207,6 +336,38 @@ export default function DashboardClient({
     await signOut();
     router.push("/auth");
     router.refresh();
+  };
+
+  const applyTheme = async () => {
+    if (!editingWorkspace) return;
+
+    let nextTheme = editingWorkspace.theme;
+
+    if (themeEditorMode === "color") {
+      if (!HEX_COLOR_PATTERN.test(customColor)) {
+        setError("Use a valid hex color like #A8C4D4.");
+        return;
+      }
+
+      nextTheme = `color:${customColor}`;
+    }
+
+    if (themeEditorMode === "gradient") {
+      nextTheme = `gradient:${buildGradient(gradientAngle, gradientStopA, gradientStopB)}`;
+    }
+
+    if (themeEditorMode === "image") {
+      if (!isValidImageUrl(imageUrl.trim())) {
+        setError("Use a valid http or https image URL.");
+        return;
+      }
+
+      nextTheme = `image:${imageUrl.trim()}`;
+    }
+
+    setError(null);
+    updateLocally(editingWorkspace.id, { theme: nextTheme });
+    await persistWorkspace(editingWorkspace.id, { theme: nextTheme });
   };
 
   if (isLoading) {
@@ -387,7 +548,7 @@ export default function DashboardClient({
             onClick={() => setEditingId(null)}
           >
             <div
-              className="absolute right-[74px] top-[126px] w-[300px] rounded-[22px] border border-[rgba(218,219,224,0.95)] bg-[rgba(246,247,250,0.97)] p-5 [box-shadow:0_18px_30px_rgba(42,42,47,0.28)] [animation:panelIn_260ms_ease-out_both]"
+              className="absolute right-[74px] top-[126px] w-[340px] rounded-[22px] border border-[rgba(218,219,224,0.95)] bg-[rgba(246,247,250,0.97)] p-5 [box-shadow:0_18px_30px_rgba(42,42,47,0.28)] [animation:panelIn_260ms_ease-out_both]"
               onClick={(event) => event.stopPropagation()}
             >
               <div className="mb-4 flex items-center justify-between">
@@ -431,6 +592,7 @@ export default function DashboardClient({
                         key={key}
                         type="button"
                         onClick={() => {
+                          setThemeEditorMode("preset");
                           updateLocally(editingWorkspace.id, { theme: key });
                           void persistWorkspace(editingWorkspace.id, { theme: key });
                         }}
@@ -445,6 +607,158 @@ export default function DashboardClient({
                       </button>
                     ))}
                   </div>
+
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {(["color", "gradient", "image"] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setThemeEditorMode(mode)}
+                        className={`min-w-[96px] flex-1 h-9 rounded-[10px] border px-3 text-[10px] leading-none font-semibold uppercase tracking-[0.04em] whitespace-nowrap transition-colors ${
+                          themeEditorMode === mode
+                            ? "border-[#767b86] bg-[#dfe3eb] text-[#565a62]"
+                            : "border-[#d0d3dc] bg-white/70 text-[#767b86] hover:border-[#a0a4af]"
+                        }`}
+                      >
+                        {mode}
+                      </button>
+                    ))}
+                  </div>
+
+                  {themeEditorMode === "color" ? (
+                    <div className="mt-2 grid gap-2">
+                      <div className="flex items-center gap-3 rounded-[12px] border border-[#d3d5dd] bg-white/75 px-3 py-2">
+                        <input
+                          type="color"
+                          value={customColor}
+                          onChange={(event) => setCustomColor(event.target.value)}
+                          className="h-9 w-12 cursor-pointer rounded border-0 bg-transparent p-0"
+                        />
+                        <input
+                          value={customColor}
+                          onChange={(event) => setCustomColor(event.target.value)}
+                          placeholder="#A8C4D4"
+                          className="h-9 flex-1 bg-transparent text-[13px] text-[#5f6269] outline-none"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void applyTheme()}
+                        className="h-9 rounded-[10px] bg-[#6f8ea3] text-[11px] font-semibold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#617f93]"
+                      >
+                        Apply Custom Color
+                      </button>
+                    </div>
+                  ) : null}
+
+                  {themeEditorMode === "gradient" ? (
+                    <div className="mt-2 grid gap-3">
+                      {/* Live preview */}
+                      <div
+                        className="h-11 w-full rounded-[10px] border border-[#d3d5dd] transition-all duration-300"
+                        style={{ backgroundImage: buildGradient(gradientAngle, gradientStopA, gradientStopB) }}
+                      />
+
+                      {/* Preset templates */}
+                      <div>
+                        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-[#9a9ea7]">Templates</p>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {GRADIENT_PRESETS.map((preset) => (
+                            <button
+                              key={preset.label}
+                              type="button"
+                              onClick={() => {
+                                setGradientStopA(preset.a);
+                                setGradientStopB(preset.b);
+                                setGradientAngle(preset.angle);
+                              }}
+                              className="h-9 rounded-[8px] border border-[rgba(0,0,0,0.07)] text-[10px] font-bold text-[rgba(55,55,65,0.85)] [text-shadow:0_1px_2px_rgba(255,255,255,0.6)] transition-transform duration-150 hover:scale-[1.05] active:scale-[0.97]"
+                              style={{ backgroundImage: buildGradient(preset.angle, preset.a, preset.b) }}
+                            >
+                              {preset.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Color stops */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-[#9a9ea7]">Start</p>
+                          <div className="flex items-center gap-2 rounded-[8px] border border-[#d3d5dd] bg-white/80 px-2 py-1">
+                            <input
+                              type="color"
+                              value={gradientStopA}
+                              onChange={(event) => setGradientStopA(event.target.value)}
+                              className="h-7 w-8 cursor-pointer rounded border-0 bg-transparent p-0"
+                            />
+                            <input
+                              value={gradientStopA}
+                              onChange={(event) => setGradientStopA(event.target.value)}
+                              maxLength={7}
+                              className="w-0 flex-1 bg-transparent text-[11px] text-[#5f6269] outline-none"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-[#9a9ea7]">End</p>
+                          <div className="flex items-center gap-2 rounded-[8px] border border-[#d3d5dd] bg-white/80 px-2 py-1">
+                            <input
+                              type="color"
+                              value={gradientStopB}
+                              onChange={(event) => setGradientStopB(event.target.value)}
+                              className="h-7 w-8 cursor-pointer rounded border-0 bg-transparent p-0"
+                            />
+                            <input
+                              value={gradientStopB}
+                              onChange={(event) => setGradientStopB(event.target.value)}
+                              maxLength={7}
+                              className="w-0 flex-1 bg-transparent text-[11px] text-[#5f6269] outline-none"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Angle slider */}
+                      <div>
+                        <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-[#9a9ea7]">Angle — {gradientAngle}°</p>
+                        <input
+                          type="range"
+                          min={0}
+                          max={360}
+                          value={gradientAngle}
+                          onChange={(event) => setGradientAngle(parseInt(event.target.value, 10))}
+                          className="w-full accent-[#8c79aa]"
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => void applyTheme()}
+                        className="h-9 rounded-[10px] bg-[#8c79aa] text-[11px] font-semibold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#796797]"
+                      >
+                        Apply Gradient
+                      </button>
+                    </div>
+                  ) : null}
+
+                  {themeEditorMode === "image" ? (
+                    <div className="mt-2 grid gap-2">
+                      <input
+                        value={imageUrl}
+                        onChange={(event) => setImageUrl(event.target.value)}
+                        placeholder="https://images.example.com/background.jpg"
+                        className="h-10 rounded-[10px] border border-[#d3d5dd] bg-white/80 px-3 text-[12px] text-[#5f6269] outline-none transition-colors focus:border-[#8f93a0]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void applyTheme()}
+                        className="h-9 rounded-[10px] bg-[#759b84] text-[11px] font-semibold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#668a75]"
+                      >
+                        Apply Image URL
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
 
                 <button

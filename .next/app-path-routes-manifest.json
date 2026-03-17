@@ -1,6 +1,12 @@
 {
-  "/_global-error/page": "/_global-error",
-  "/_not-found/page": "/_not-found",
+  "/api/auth/me/route": "/api/auth/me",
   "/api/db-check/route": "/api/db-check",
-  "/page": "/"
+  "/api/workspaces/[id]/route": "/api/workspaces/[id]",
+  "/api/workspaces/route": "/api/workspaces",
+  "/_not-found/page": "/_not-found",
+  "/auth/page": "/auth",
+  "/auth/sign-in/[[...sign-in]]/page": "/auth/sign-in/[[...sign-in]]",
+  "/auth/sign-up/[[...sign-up]]/page": "/auth/sign-up/[[...sign-up]]",
+  "/page": "/",
+  "/dashboard/page": "/dashboard"
 }
