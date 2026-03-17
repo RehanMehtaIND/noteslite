@@ -1,7 +1,7 @@
 {
   "version": 4,
   "routes": {
-    "/_global-error": {
+    "/": {
       "experimentalBypassFor": [
         {
           "type": "header",
@@ -14,8 +14,8 @@
         }
       ],
       "initialRevalidateSeconds": false,
-      "srcRoute": "/_global-error",
-      "dataRoute": "/_global-error.rsc",
+      "srcRoute": "/",
+      "dataRoute": "/index.rsc",
       "allowHeader": [
         "host",
         "x-matched-path",
@@ -50,7 +50,7 @@
         "x-next-revalidate-tag-token"
       ]
     },
-    "/": {
+    "/dashboard": {
       "experimentalBypassFor": [
         {
           "type": "header",
@@ -63,8 +63,32 @@
         }
       ],
       "initialRevalidateSeconds": false,
-      "srcRoute": "/",
-      "dataRoute": "/index.rsc",
+      "srcRoute": "/dashboard",
+      "dataRoute": "/dashboard.rsc",
+      "allowHeader": [
+        "host",
+        "x-matched-path",
+        "x-prerender-revalidate",
+        "x-prerender-revalidate-if-generated",
+        "x-next-revalidated-tags",
+        "x-next-revalidate-tag-token"
+      ]
+    },
+    "/auth": {
+      "experimentalBypassFor": [
+        {
+          "type": "header",
+          "key": "next-action"
+        },
+        {
+          "type": "header",
+          "key": "content-type",
+          "value": "multipart/form-data;.*"
+        }
+      ],
+      "initialRevalidateSeconds": false,
+      "srcRoute": "/auth",
+      "dataRoute": "/auth.rsc",
       "allowHeader": [
         "host",
         "x-matched-path",
@@ -78,8 +102,8 @@
   "dynamicRoutes": {},
   "notFoundRoutes": [],
   "preview": {
-    "previewModeId": "663b3f7ac190d7b3882f9d4523a279b1",
-    "previewModeSigningKey": "21ac9d77f2d129141024ff0c30af25c735456c5b155b979380931a34cf6a147d",
-    "previewModeEncryptionKey": "33019c2abe526ea8976dee954a3a3d3f43c5a2d1b85de39bf88bc33c2f10b1ef"
+    "previewModeId": "335870715b7b77ac7d8ab198841ac603",
+    "previewModeSigningKey": "68b64e06cb60fa4a1bbd1392892e0bd943f676ad536e8e2441da9fd06667234f",
+    "previewModeEncryptionKey": "dbf6a5d0575bf4c5dd137bc3471d1ebf38651a9aa24d1bc3b9414352853022f0"
   }
 }

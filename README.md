@@ -28,8 +28,8 @@ cp .env.example .env
 - `CLERK_SECRET_KEY`
 - `NEXT_PUBLIC_CLERK_SIGN_IN_URL` (use `/auth/sign-in`)
 - `NEXT_PUBLIC_CLERK_SIGN_UP_URL` (use `/auth/sign-up`)
-- `NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL` (use `/dashboard`)
-- `NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL` (use `/dashboard`)
+- `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL` (use `/dashboard`)
+- `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL` (use `/dashboard`)
 
 4. Run Prisma migration:
 

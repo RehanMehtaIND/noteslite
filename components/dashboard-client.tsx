@@ -148,7 +148,6 @@ export default function DashboardClient({
   userName,
 }: {
   userName: string;
-  userId: string;
 }) {
   const router = useRouter();
   const { signOut } = useClerk();

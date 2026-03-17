@@ -1,18 +1,9 @@
-import { redirect } from "next/navigation";
-import { SignUp } from "@clerk/nextjs";
+import AuthPageShell from "@/components/auth-page-shell";
 
-import { getCurrentUser } from "@/lib/auth";
-
-export default async function SignUpPage() {
-  const user = await getCurrentUser();
-
-  if (user) {
-    redirect("/dashboard");
-  }
-
+export default function SignUpPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#e3dbd3] px-4">
-      <SignUp routing="path" path="/auth/sign-up" signInUrl="/auth/sign-in" />
+      <AuthPageShell mode="sign-up" />
     </div>
   );
 }

@@ -1,5 +1,13 @@
 import React, { useState } from "react";
 
+const AUTH_BASE_URL =
+    (import.meta.env.VITE_AUTH_BASE_URL as string | undefined)?.replace(/\/$/, "") ||
+    "http://localhost:3000";
+
+function goToAuth(path: string) {
+    window.location.href = `${AUTH_BASE_URL}${path}`;
+}
+
 export const Login: React.FC<{ onSignup: () => void }> = ({ onSignup }) => {
     return (
         <div className="min-h-screen flex items-center justify-center bg-[#e3dbd3] px-4 font-sans text-[#4a4440]">
@@ -37,6 +45,7 @@ export const Login: React.FC<{ onSignup: () => void }> = ({ onSignup }) => {
                         {/* Login Button */}
                         <button
                             type="button"
+                            onClick={() => goToAuth("/auth/sign-in")}
                             className="w-full py-3.5 rounded-full bg-gradient-to-b from-[#eeb4a8] to-[#d58b7c] text-white tracking-[0.2em] shadow-[0_4px_15px_rgba(213,139,124,0.4)] hover:shadow-[0_6px_20px_rgba(213,139,124,0.5)] active:scale-[0.98] transition-all font-bold text-sm uppercase"
                         >
                             Log In
@@ -49,6 +58,7 @@ export const Login: React.FC<{ onSignup: () => void }> = ({ onSignup }) => {
                     <div className="w-full space-y-4">
                         <button
                             type="button"
+                            onClick={() => goToAuth("/auth/sign-in")}
                             className="w-full py-3.5 rounded-full bg-[#e6d9d4] text-[#6d6461] shadow-[0_4px_10px_rgba(0,0,0,0.08)] hover:bg-[#dfd0ca] transition-colors tracking-[0.1em] text-xs font-bold uppercase border border-white/40"
                         >
                             Log In Using Google
@@ -113,6 +123,7 @@ export const Signup: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
 
                         <button
                             type="button"
+                            onClick={() => goToAuth("/auth/sign-up")}
                             className="w-full py-3 rounded-full bg-gradient-to-b from-[#eeb4a8] to-[#d58b7c] text-white tracking-[0.2em] shadow-[0_4px_15px_rgba(213,139,124,0.4)] hover:shadow-[0_6px_20px_rgba(213,139,124,0.5)] active:scale-[0.98] transition-all font-bold text-xs uppercase mt-2"
                         >
                             Sign Up
