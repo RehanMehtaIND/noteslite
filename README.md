@@ -1,13 +1,21 @@
 # NOTESLITE (Next.js + Prisma + PostgreSQL)
 
-This project has been migrated from a split `Vite + Express` setup to a single:
+NOTESLITE runs as a single Next.js app with:
 
 - Next.js (App Router)
 - React + TypeScript
 - Prisma ORM
 - PostgreSQL
+- Clerk authentication
 
-## Getting Started
+## Prerequisites
+
+- Node.js 20+
+- npm 10+
+- PostgreSQL running locally or remotely
+- Clerk project keys
+
+## Installation
 
 1. Install dependencies:
 
@@ -15,51 +23,84 @@ This project has been migrated from a split `Vite + Express` setup to a single:
 npm install
 ```
 
-2. Create your environment file:
+2. Create your local environment file:
 
 ```bash
 cp .env.example .env
 ```
 
-3. Update `.env` with your PostgreSQL and Clerk values:
+3. Fill `.env` with valid values:
 
 - `DATABASE_URL`
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
 - `CLERK_SECRET_KEY`
-- `NEXT_PUBLIC_CLERK_SIGN_IN_URL` (use `/auth/sign-in`)
-- `NEXT_PUBLIC_CLERK_SIGN_UP_URL` (use `/auth/sign-up`)
-- `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL` (use `/dashboard`)
-- `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL` (use `/dashboard`)
+- `NEXT_PUBLIC_CLERK_SIGN_IN_URL=/auth/sign-in`
+- `NEXT_PUBLIC_CLERK_SIGN_UP_URL=/auth/sign-up`
+- `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/dashboard`
+- `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/dashboard`
 
-4. Run Prisma migration:
+## Database Setup
+
+Apply existing migrations:
 
 ```bash
-npm run prisma:migrate -- --name init
+npm run prisma:migrate
 ```
 
-5. Start the app:
+Generate Prisma Client (optional, usually auto-generated during migrate):
+
+```bash
+npm run prisma:generate
+```
+
+Open Prisma Studio (optional):
+
+```bash
+npm run prisma:studio
+```
+
+## Run the App
+
+Start development server:
 
 ```bash
 npm run dev
 ```
 
-Open `http://localhost:3000`.
+Open http://localhost:3000.
 
-## Key Paths
+## Available Scripts
 
-- `app/` - Next.js pages and API routes
-- `components/` - client UI components
-- `lib/` - shared server utilities (Clerk auth/prisma)
-- `prisma/schema.prisma` - database schema
+- `npm run dev` - start Next.js in development mode
+- `npm run build` - create production build
+- `npm run start` - run production server
+- `npm run lint` - run ESLint
+- `npm run prisma:migrate` - apply dev migrations with Prisma
+- `npm run prisma:generate` - generate Prisma client
+- `npm run prisma:studio` - open Prisma Studio
 
-## Authentication
+## Project Structure
 
-- Clerk is configured in `app/layout.tsx` with `ClerkProvider`.
-- Protected routes are enforced in `middleware.ts`.
+- `app/` - Next.js routes, pages, and API handlers
+- `components/` - UI and page shell components
+- `lib/` - shared server utilities (auth, Prisma helpers)
+- `prisma/schema.prisma` - database models
+- `middleware.ts` - auth route protection
+
+## Authentication Routes
+
 - Sign in: `/auth/sign-in`
 - Sign up: `/auth/sign-up`
-- `/auth` redirects to `/auth/sign-in`.
+- `/auth` redirects to `/auth/sign-in`
 
-## Notes
+## Important Note About Migrations
 
-- Legacy `frontend/` and `backend/` folders are still present for reference but are no longer used by the app runtime.
+Do not run `npm run prisma:migrate -- --name init` on an existing project setup unless you are intentionally creating a brand-new migration. For normal setup, use:
+
+```bash
+npm run prisma:migrate
+```
+
+## Legacy Folders
+
+`frontend/` and `backend/` are legacy reference folders from the older split architecture and are not used by the current runtime.
