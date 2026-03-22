@@ -30,7 +30,10 @@ export async function GET(_: Request, context: RouteContext) {
     where: { id, userId: user.id },
     include: {
       columns: { orderBy: { orderIndex: "asc" } },
-      cards: { orderBy: { createdAt: "asc" }, include: { tags: true } },
+      cards: {
+        orderBy: [{ positionY: "asc" }, { createdAt: "asc" }],
+        include: { tags: true },
+      },
       tags: true,
       connections: true,
     },
