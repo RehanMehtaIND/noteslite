@@ -338,6 +338,13 @@ export default function DashboardClient({
     router.refresh();
   };
 
+  const openWorkspace = useCallback(
+    (workspaceId: string) => {
+      router.push(`/dashboard/${workspaceId}`);
+    },
+    [router],
+  );
+
   const applyTheme = async () => {
     if (!editingWorkspace) return;
 
@@ -495,7 +502,17 @@ export default function DashboardClient({
                 {workspaces.map((ws, index) => (
                   <article
                     key={ws.id}
-                    className="group relative h-[262px] overflow-hidden rounded-[24px] border-2 border-[rgba(255,255,255,0.8)] bg-[#cfd2d9] bg-cover bg-center [box-shadow:0_16px_22px_rgba(47,43,40,0.42)] [animation:cardRiseIn_680ms_cubic-bezier(0.2,1,0.3,1)_both] transform-gpu will-change-transform transition-[transform,box-shadow,filter] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1 hover:scale-[1.01] hover:[box-shadow:0_20px_26px_rgba(47,43,40,0.38)] after:pointer-events-none after:absolute after:inset-0 after:bg-[linear-gradient(180deg,rgba(255,255,255,0.08)_0%,rgba(0,0,0,0.18)_100%)] motion-reduce:animate-none"
+                    onClick={() => openWorkspace(ws.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        openWorkspace(ws.id);
+                      }
+                    }}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`Open ${ws.name} workspace`}
+                    className="group relative h-[262px] cursor-pointer overflow-hidden rounded-[24px] border-2 border-[rgba(255,255,255,0.8)] bg-[#cfd2d9] bg-cover bg-center [box-shadow:0_16px_22px_rgba(47,43,40,0.42)] [animation:cardRiseIn_680ms_cubic-bezier(0.2,1,0.3,1)_both] transform-gpu will-change-transform transition-[transform,box-shadow,filter] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1 hover:scale-[1.01] hover:[box-shadow:0_20px_26px_rgba(47,43,40,0.38)] after:pointer-events-none after:absolute after:inset-0 after:bg-[linear-gradient(180deg,rgba(255,255,255,0.08)_0%,rgba(0,0,0,0.18)_100%)] motion-reduce:animate-none"
                     style={{
                       ...getThemeBackground(ws.theme),
                       animationDelay: `${index * 90 + 80}ms`,
@@ -503,7 +520,10 @@ export default function DashboardClient({
                   >
                     <button
                       type="button"
-                      onClick={() => setEditingId(ws.id)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setEditingId(ws.id);
+                      }}
                       className="absolute right-[8px] top-[8px] z-[5] grid h-8 w-8 place-items-center rounded-full border border-[rgba(255,255,255,0.62)] bg-[rgba(238,241,246,0.72)] text-[13px] leading-none tracking-[-1px] text-[rgba(88,91,99,0.95)] transition-colors duration-300 hover:bg-[rgba(255,255,255,0.9)]"
                       aria-label={`Edit ${ws.name} workspace`}
                     >
