@@ -14,6 +14,12 @@ body {
 
 :root {
   color-scheme: light;
+  --dashboard-modal-overlay: rgba(31, 33, 38, 0.22);
+  --dashboard-modal-panel-base: #f2eee8;
+  --dashboard-modal-panel-gradient: linear-gradient(180deg, rgba(246, 243, 238, 0.98) 0%, rgba(236, 238, 242, 0.96) 100%);
+  --dashboard-modal-border: rgba(211, 213, 221, 0.92);
+  --dashboard-modal-shadow: 0 28px 70px rgba(57, 49, 44, 0.24);
+  --dashboard-modal-ring: rgba(118, 123, 134, 0.34);
 }
 
 body {
@@ -36,80 +42,7 @@ button:disabled {
   cursor: not-allowed;
 }
 
-.workspace-board-theme {
-  --board-canvas: linear-gradient(180deg, #ebe6de 0%, #e3cdc0 100%);
-  --board-shell-bg: rgba(236, 236, 238, 0.84);
-  --board-shell-border: rgba(255, 255, 255, 0.74);
-  --board-rail-bg: linear-gradient(180deg, rgba(241, 236, 231, 0.92) 0%, rgba(231, 232, 236, 0.96) 100%);
-  --board-panel-bg: linear-gradient(180deg, rgba(236, 236, 238, 0.98) 0%, rgba(226, 229, 235, 0.96) 100%);
-  --board-surface: rgba(246, 247, 250, 0.96);
-  --board-surface-strong: rgba(238, 241, 246, 0.9);
-  --board-surface-muted: rgba(223, 227, 235, 0.74);
-  --board-surface-inset: rgba(255, 255, 255, 0.72);
-  --board-border: rgba(211, 213, 221, 0.92);
-  --board-border-strong: rgba(191, 194, 202, 0.96);
-  --board-border-accent: rgba(118, 123, 134, 0.48);
-  --board-text-strong: #5f6269;
-  --board-text: #666a72;
-  --board-text-muted: #6f7279;
-  --board-text-soft: #7a7e87;
-  --board-accent: #767b86;
-  --board-accent-strong: #5c6068;
-  --board-accent-soft: rgba(118, 123, 134, 0.12);
-  --board-accent-glow: rgba(118, 123, 134, 0.2);
-  --board-warm: #7f7b7d;
-  --board-warm-soft: rgba(127, 123, 125, 0.12);
-  --board-danger: #d96464;
-  --board-danger-soft: rgba(217, 100, 100, 0.12);
-  --board-focus-ring: rgba(118, 123, 134, 0.36);
-  --board-drop: rgba(118, 123, 134, 0.2);
-  --board-drop-active: rgba(118, 123, 134, 0.76);
-  --board-drag-guide-passive: rgba(118, 123, 134, 0.28);
-  --board-drag-guide-active: rgba(118, 123, 134, 0.82);
-  --board-action-chip-height: 31px;
-  --board-action-chip-height-roomy: 36px;
-  --board-action-chip-px: 0.7rem;
-  --board-action-chip-px-wide: 0.95rem;
-  --board-action-chip-track: 0.11em;
-  --board-header-chip-height: 28px;
-  --board-header-chip-px: 0.72rem;
-  --board-header-chip-track: 0.13em;
-  --board-header-row-min-height: 34px;
-  --board-action-icon-size: 31px;
-  --board-action-menu-item-height: 34px;
-  --board-status-pill-height: 24px;
-  --board-status-pill-px: 0.6rem;
-  --board-status-pill-track: 0.14em;
-  --board-column-handle-size: 40px;
-  --board-block-handle-size: 34px;
-  --board-handle-dot-size: 3.5px;
-  --board-handle-dot-gap: 3px;
-  --board-handle-icon: rgba(95, 98, 105, 0.82);
-  --board-handle-surface: rgba(246, 247, 250, 0.92);
-  --board-handle-surface-pressed: rgba(255, 255, 255, 0.98);
-  --board-shadow-shell: 0 28px 68px rgba(90, 72, 58, 0.18);
-  --board-shadow-panel: 0 18px 42px rgba(47, 43, 40, 0.14);
-  --board-shadow-card: 0 16px 32px rgba(47, 43, 40, 0.11);
-  --board-shadow-lift: 0 22px 46px rgba(47, 43, 40, 0.16);
-  --board-motion-fast: 160ms;
-  --board-motion-base: 220ms;
-  --board-ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
-  --board-fit-padding: 16px;
-  --board-fit-switch-offset: 20px;
-  color: var(--board-text);
-}
-
-.workspace-board-viewport {
-  overscroll-behavior: none;
-}
-
-.workspace-board-stage {
-  transform-origin: center center;
-  will-change: transform;
-}
-
-.workspace-board-scroll,
-.workspace-board-panel-scroll {
+.dashboard-modal-scroll {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
@@ -117,8 +50,7 @@ button:disabled {
   scrollbar-color: rgba(86, 106, 132, 0.35) transparent;
 }
 
-.workspace-board-scroll::-webkit-scrollbar,
-.workspace-board-panel-scroll::-webkit-scrollbar {
+.dashboard-modal-scroll::-webkit-scrollbar {
   width: 12px;
   height: 12px;
 }

@@ -4,11 +4,16 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
 } from "react";
 import { useRouter } from "next/navigation";
-import { useClerk } from "@clerk/nextjs";
+import { useClerk, useUser } from "@clerk/nextjs";
+import ProfileModal, {
+  type PasswordForm,
+  type ProfileSettings,
+} from "@/components/profile-modal";
 
 type WorkspaceItem = {
   id: string;
@@ -55,6 +60,13 @@ const THEME_COLORS: Record<string, string> = {
 const DEFAULT_GRADIENT = "linear-gradient(135deg, #a8c4d4 0%, #c4a8d4 100%)";
 const HEX_COLOR_PATTERN = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 const GRADIENT_PATTERN = /^(linear-gradient|radial-gradient|conic-gradient)\(.+\)$/i;
+const PROFILE_STORAGE_KEY = "noteslite.dashboard.profile.v1";
+const PROFILE_MODAL_DURATION = 240;
+const DEFAULT_PASSWORD_FORM: PasswordForm = {
+  currentPassword: "",
+  newPassword: "",
+  confirmPassword: "",
+};
 
 const GRADIENT_PRESETS = [
   { label: "Dusk",   a: "#a8c4d4", b: "#c4a8d4", angle: 135 },
@@ -112,6 +124,90 @@ function isValidImageUrl(value: string) {
   }
 }
 
+function getLocalTimezone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
+function getProfileInitials(userName: string) {
+  const parts = userName
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (parts.length >= 2) {
+    return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
+  }
+
+  return userName.replace(/[^a-z0-9]/gi, "").slice(0, 2).toUpperCase() || "NL";
+}
+
+function createDefaultProfileSettings({
+  email,
+  avatarUrl,
+  emailVerified,
+}: {
+  email: string;
+  avatarUrl: string;
+  emailVerified: boolean;
+}): ProfileSettings {
+  return {
+    avatarMode: avatarUrl ? "url" : "placeholder",
+    avatarUrl,
+    email,
+    emailVerified,
+    showEmail: true,
+    timezone: getLocalTimezone(),
+    emailNotifications: true,
+    twoFactorEnabled: false,
+    twoFactorMethod: "authenticator",
+  };
+}
+
+function mergeStoredProfileSettings(
+  defaults: ProfileSettings,
+  stored: unknown,
+): ProfileSettings {
+  if (!stored || typeof stored !== "object") {
+    return defaults;
+  }
+
+  const candidate = stored as Partial<ProfileSettings>;
+
+  return {
+    avatarMode:
+      candidate.avatarMode === "placeholder" || candidate.avatarMode === "url"
+        ? candidate.avatarMode
+        : defaults.avatarMode,
+    avatarUrl: typeof candidate.avatarUrl === "string" ? candidate.avatarUrl : defaults.avatarUrl,
+    email: typeof candidate.email === "string" ? candidate.email : defaults.email,
+    emailVerified:
+      typeof candidate.emailVerified === "boolean"
+        ? candidate.emailVerified
+        : defaults.emailVerified,
+    showEmail:
+      typeof candidate.showEmail === "boolean" ? candidate.showEmail : defaults.showEmail,
+    timezone: typeof candidate.timezone === "string" && candidate.timezone
+      ? candidate.timezone
+      : defaults.timezone,
+    emailNotifications:
+      typeof candidate.emailNotifications === "boolean"
+        ? candidate.emailNotifications
+        : defaults.emailNotifications,
+    twoFactorEnabled:
+      typeof candidate.twoFactorEnabled === "boolean"
+        ? candidate.twoFactorEnabled
+        : defaults.twoFactorEnabled,
+    twoFactorMethod:
+      candidate.twoFactorMethod === "sms" || candidate.twoFactorMethod === "authenticator"
+        ? candidate.twoFactorMethod
+        : defaults.twoFactorMethod,
+  };
+}
+
 function getThemeBackground(theme: string): CSSProperties {
   const parsed = parseTheme(theme);
 
@@ -150,6 +246,7 @@ export default function DashboardClient({
   userName: string;
 }) {
   const router = useRouter();
+  const { user } = useUser();
   const { signOut } = useClerk();
   const [scale, setScale] = useState(getDashboardScale);
   const [workspaces, setWorkspaces] = useState<WorkspaceItem[]>([]);
@@ -164,11 +261,113 @@ export default function DashboardClient({
   const [gradientStopB, setGradientStopB] = useState("#c4a8d4");
   const [gradientAngle, setGradientAngle] = useState(135);
   const [imageUrl, setImageUrl] = useState("");
+  const [isProfileMounted, setIsProfileMounted] = useState(false);
+  const [isProfileVisible, setIsProfileVisible] = useState(false);
+  const [profile, setProfile] = useState<ProfileSettings>(() =>
+    createDefaultProfileSettings({ email: "", avatarUrl: "", emailVerified: false }),
+  );
+  const [passwordForm, setPasswordForm] = useState<PasswordForm>(DEFAULT_PASSWORD_FORM);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+  const profileTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const profileCloseTimerRef = useRef<number | null>(null);
+  const hasHydratedProfileRef = useRef(false);
+  const profileInitials = useMemo(() => getProfileInitials(userName), [userName]);
+  const userEmail = user?.primaryEmailAddress?.emailAddress ?? "";
+  const userAvatarUrl = user?.imageUrl ?? "";
+  const isPrimaryEmailVerified = user?.primaryEmailAddress?.verification?.status === "verified";
+  const defaultProfile = useMemo(
+    () =>
+      createDefaultProfileSettings({
+        email: userEmail,
+        avatarUrl: userAvatarUrl,
+        emailVerified: isPrimaryEmailVerified,
+      }),
+    [isPrimaryEmailVerified, userAvatarUrl, userEmail],
+  );
+  const profileAvatarStyle =
+    profile.avatarMode === "url" && isValidImageUrl(profile.avatarUrl)
+      ? {
+          backgroundImage: `linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.16) 100%), url("${profile.avatarUrl}")`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }
+      : undefined;
 
   const editingWorkspace = useMemo(
     () => workspaces.find((w) => w.id === editingId) ?? null,
     [workspaces, editingId],
   );
+
+  const openProfileModal = useCallback(() => {
+    setPasswordError(null);
+    setPasswordSuccess(null);
+
+    if (profileCloseTimerRef.current !== null) {
+      window.clearTimeout(profileCloseTimerRef.current);
+      profileCloseTimerRef.current = null;
+    }
+
+    setIsProfileMounted(true);
+    window.requestAnimationFrame(() => setIsProfileVisible(true));
+  }, []);
+
+  const closeProfileModal = useCallback(() => {
+    setIsProfileVisible(false);
+    setPasswordForm(DEFAULT_PASSWORD_FORM);
+    setPasswordError(null);
+    setPasswordSuccess(null);
+
+    if (profileCloseTimerRef.current !== null) {
+      window.clearTimeout(profileCloseTimerRef.current);
+    }
+
+    profileCloseTimerRef.current = window.setTimeout(() => {
+      setIsProfileMounted(false);
+      profileTriggerRef.current?.focus();
+      profileCloseTimerRef.current = null;
+    }, PROFILE_MODAL_DURATION);
+  }, []);
+
+  const updateProfile = useCallback((updates: Partial<ProfileSettings>) => {
+    setProfile((prev) => ({ ...prev, ...updates }));
+  }, []);
+
+  const updatePasswordField = useCallback(
+    (field: keyof PasswordForm, value: string) => {
+      setPasswordForm((prev) => ({ ...prev, [field]: value }));
+      setPasswordError(null);
+      setPasswordSuccess(null);
+    },
+    [],
+  );
+
+  const savePasswordChange = useCallback(() => {
+    const current = passwordForm.currentPassword.trim();
+    const next = passwordForm.newPassword.trim();
+    const confirm = passwordForm.confirmPassword.trim();
+
+    setPasswordError(null);
+    setPasswordSuccess(null);
+
+    if (!current) {
+      setPasswordError("Enter your current password.");
+      return;
+    }
+
+    if (next.length < 8) {
+      setPasswordError("Use at least 8 characters for the new password.");
+      return;
+    }
+
+    if (next !== confirm) {
+      setPasswordError("New password and confirm password must match.");
+      return;
+    }
+
+    setPasswordForm(DEFAULT_PASSWORD_FORM);
+    setPasswordSuccess("Password updated locally for this dashboard preview.");
+  }, [passwordForm]);
 
   const loadWorkspaces = useCallback(async () => {
     setIsLoading(true);
@@ -243,8 +442,61 @@ export default function DashboardClient({
   }, []);
 
   useEffect(() => {
+    return () => {
+      if (profileCloseTimerRef.current !== null) {
+        window.clearTimeout(profileCloseTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     void loadWorkspaces();
   }, [loadWorkspaces]);
+
+  useEffect(() => {
+    if (!hasHydratedProfileRef.current) {
+      try {
+        const raw = window.localStorage.getItem(PROFILE_STORAGE_KEY);
+        const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+        setProfile(mergeStoredProfileSettings(defaultProfile, parsed));
+      } catch {
+        setProfile(defaultProfile);
+      }
+
+      hasHydratedProfileRef.current = true;
+      return;
+    }
+
+    setProfile((prev) => {
+      let changed = false;
+      const next = { ...prev };
+
+      if (defaultProfile.email && prev.email !== defaultProfile.email) {
+        next.email = defaultProfile.email;
+        changed = true;
+      }
+
+      if (!prev.avatarUrl && defaultProfile.avatarUrl) {
+        next.avatarUrl = defaultProfile.avatarUrl;
+        changed = true;
+      }
+
+      if (!prev.emailVerified && defaultProfile.emailVerified) {
+        next.emailVerified = true;
+        changed = true;
+      }
+
+      return changed ? next : prev;
+    });
+  }, [defaultProfile]);
+
+  useEffect(() => {
+    if (!hasHydratedProfileRef.current) {
+      return;
+    }
+
+    window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+  }, [profile]);
 
   useEffect(() => {
     if (!editingWorkspace) {
@@ -470,19 +722,29 @@ export default function DashboardClient({
                 </h1>
                 <div className="flex items-center gap-3 text-[13px] uppercase tracking-[0.16em] text-[#696d75]">
                   <span>{userName}</span>
-                  <button
-                    type="button"
-                    onClick={() => void logout()}
-                    className="rounded-full border border-[#bfc2ca] px-4 py-1.5 text-[11px] font-semibold tracking-[0.12em] text-[#5c6068] transition-colors hover:bg-[#e9ebf0]"
-                  >
-                    Log Out
-                  </button>
                 </div>
               </div>
-              <div
-                className="relative h-[74px] w-[74px] rounded-full bg-[radial-gradient(circle_at_30%_25%,#f2f2f2_0%,#dbdbdb_76%)] [box-shadow:0_12px_24px_rgba(87,78,69,0.24)] [animation:avatarDrift_4.6s_ease-in-out_infinite] before:absolute before:top-[14px] before:left-1/2 before:h-5 before:w-5 before:-translate-x-1/2 before:rounded-full before:bg-[#8f8f90] before:content-[''] after:absolute after:bottom-[14px] after:left-1/2 after:h-5 after:w-[38px] after:-translate-x-1/2 after:rounded-[20px_20px_12px_12px] after:bg-[#8f8f90] after:content-[''] motion-reduce:animate-none"
-                aria-hidden="true"
-              />
+              <button
+                ref={profileTriggerRef}
+                type="button"
+                onClick={openProfileModal}
+                aria-label={`Open profile settings for ${userName}`}
+                aria-haspopup="dialog"
+                aria-expanded={isProfileMounted && isProfileVisible}
+                aria-controls="dashboard-profile-dialog"
+                className="group flex flex-col items-center gap-2 rounded-[28px] px-2 py-2 text-[11px] uppercase tracking-[0.18em] text-[#696d75] transition-colors duration-300 hover:text-[#565a62] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dashboard-modal-ring)] focus-visible:ring-offset-4 focus-visible:ring-offset-[rgba(235,230,222,0.96)]"
+              >
+                <span
+                  className={`grid h-[78px] w-[78px] place-items-center rounded-full border border-[rgba(255,255,255,0.78)] bg-[radial-gradient(circle_at_30%_25%,#f2f2f2_0%,#dbdbdb_76%)] text-[22px] font-semibold tracking-[0.08em] text-[#7b7f87] [box-shadow:0_12px_24px_rgba(87,78,69,0.24)] [animation:avatarDrift_4.6s_ease-in-out_infinite] transition-[transform,box-shadow] duration-300 group-hover:-translate-y-0.5 group-hover:[box-shadow:0_16px_30px_rgba(87,78,69,0.28)] motion-reduce:animate-none ${
+                    profileAvatarStyle ? "bg-cover bg-center text-transparent" : ""
+                  }`}
+                  style={profileAvatarStyle}
+                  aria-hidden="true"
+                >
+                  {profileAvatarStyle ? "." : profileInitials}
+                </span>
+                <span>Profile</span>
+              </button>
             </header>
 
             <section className="mt-[12px] flex-1 rounded-[34px] bg-[rgba(236,236,238,0.96)] px-[74px] pb-[54px] pt-[56px] [box-shadow:0_22px_30px_rgba(90,72,58,0.33)] [animation:fadeUp_760ms_ease-out_180ms_both] motion-reduce:animate-none">
@@ -793,6 +1055,23 @@ export default function DashboardClient({
           </div>
         ) : null}
       </div>
+
+      {isProfileMounted ? (
+        <ProfileModal
+          isVisible={isProfileVisible}
+          userName={userName}
+          fallbackInitials={profileInitials}
+          profile={profile}
+          passwordForm={passwordForm}
+          passwordError={passwordError}
+          passwordSuccess={passwordSuccess}
+          onClose={closeProfileModal}
+          onLogout={() => void logout()}
+          onUpdateProfile={updateProfile}
+          onUpdatePassword={updatePasswordField}
+          onSavePassword={savePasswordChange}
+        />
+      ) : null}
     </div>
   );
 }
