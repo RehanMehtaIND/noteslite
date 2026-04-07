@@ -26,8 +26,15 @@ export default function WorkspaceBoardPageShell({
 
   if (!isLoaded || !userId) {
     return (
-      <div className="min-h-screen bg-[linear-gradient(180deg,#ebe6de_0%,#e3cdc0_100%)] px-6 py-10 text-[#64666b]">
-        Loading board...
+      <div className="workspace-board-theme min-h-screen bg-[var(--board-canvas)] px-6 py-10 text-[color:var(--board-text)]">
+        <div className="mx-auto max-w-3xl rounded-[28px] border border-[color:var(--board-shell-border)] bg-[var(--board-shell-bg)] p-6 shadow-[var(--board-shadow-shell)] backdrop-blur-xl">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--board-text-soft)]">
+            Loading
+          </p>
+          <p className="mt-3 text-[24px] leading-tight tracking-[0.03em] text-[color:var(--board-text-strong)] [font-family:'Cormorant_Garamond','Times_New_Roman',serif]">
+            Preparing your board workspace.
+          </p>
+        </div>
       </div>
     );
   }

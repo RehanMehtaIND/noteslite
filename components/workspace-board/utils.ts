@@ -205,6 +205,31 @@ export function renameColumn(board: BoardState, columnId: string, title: string)
   );
 }
 
+export function moveColumn(board: BoardState, columnId: string, targetIndex: number) {
+  const sourceIndex = board.columns.findIndex((column) => column.id === columnId);
+  if (sourceIndex < 0) {
+    return board;
+  }
+
+  const nextColumns = [...board.columns];
+  const [movingColumn] = nextColumns.splice(sourceIndex, 1);
+  if (!movingColumn) {
+    return board;
+  }
+
+  let insertionIndex = clamp(targetIndex, 0, nextColumns.length);
+  if (sourceIndex < targetIndex) {
+    insertionIndex -= 1;
+  }
+
+  if (insertionIndex === sourceIndex) {
+    return board;
+  }
+
+  nextColumns.splice(insertionIndex, 0, movingColumn);
+  return { ...board, columns: nextColumns };
+}
+
 export function addCard(board: BoardState, columnId: string, blockType: BlockType = "note") {
   return withUpdatedColumns(board, (columns) =>
     columns.map((column) =>
@@ -334,21 +359,49 @@ export function duplicateBlock(board: BoardState, cardId: string, blockId: strin
   });
 }
 
-export function moveBlock(board: BoardState, cardId: string, blockId: string, direction: "up" | "down") {
+export function reorderBlockInCard(board: BoardState, cardId: string, blockId: string, targetIndex: number) {
   return updateCard(board, cardId, (card) => {
-    const index = card.blocks.findIndex((block) => block.id === blockId);
-    if (index < 0) return card;
-
-    const swapIndex = direction === "up" ? index - 1 : index + 1;
-    if (swapIndex < 0 || swapIndex >= card.blocks.length) {
+    const sourceIndex = card.blocks.findIndex((block) => block.id === blockId);
+    if (sourceIndex < 0) {
       return card;
     }
 
     const nextBlocks = [...card.blocks];
-    const [moving] = nextBlocks.splice(index, 1);
-    nextBlocks.splice(swapIndex, 0, moving);
+    const [movingBlock] = nextBlocks.splice(sourceIndex, 1);
+    if (!movingBlock) {
+      return card;
+    }
+
+    let insertionIndex = clamp(targetIndex, 0, nextBlocks.length);
+    if (sourceIndex < targetIndex) {
+      insertionIndex -= 1;
+    }
+
+    if (insertionIndex === sourceIndex) {
+      return card;
+    }
+
+    nextBlocks.splice(insertionIndex, 0, movingBlock);
     return { ...card, blocks: nextBlocks };
   });
+}
+
+export function moveBlock(board: BoardState, cardId: string, blockId: string, direction: "up" | "down") {
+  const column = board.columns.find((currentColumn) =>
+    currentColumn.cards.some((card) => card.id === cardId),
+  );
+  const card = column?.cards.find((currentCard) => currentCard.id === cardId);
+  const index = card?.blocks.findIndex((block) => block.id === blockId) ?? -1;
+  if (!card || index < 0) {
+    return board;
+  }
+
+  const targetIndex = direction === "up" ? index - 1 : index + 1;
+  if (targetIndex < 0 || targetIndex >= card.blocks.length) {
+    return board;
+  }
+
+  return reorderBlockInCard(board, cardId, blockId, targetIndex);
 }
 
 export function cardPreview(card: Card) {
