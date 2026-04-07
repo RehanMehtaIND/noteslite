@@ -1,15 +1,40 @@
+import { BLOCK_LABELS } from "./constants";
 import type {
   Block,
   BlockDataByType,
   BlockType,
   BoardState,
   Card,
+  CanvasCamera,
+  CanvasBounds,
+  CanvasItem,
+  CanvasItemSource,
+  CanvasItemType,
+  CanvasPoint,
   Column,
+  PaletteItem,
   TodoItem,
 } from "./types";
 
 const FALLBACK_WORKSPACE_TITLE = "New Workspace";
 let idCounter = 0;
+
+const CANVAS_ITEM_DIMENSIONS: Record<CanvasItemType, { width: number; height: number }> = {
+  note: { width: 320, height: 232 },
+  image: { width: 336, height: 296 },
+  "board-card": { width: 320, height: 224 },
+  "column-shell": { width: 300, height: 244 },
+};
+
+export const DEFAULT_CANVAS_BOUNDS: CanvasBounds = {
+  width: 1820,
+  height: 1180,
+};
+
+export const DEFAULT_CANVAS_CAMERA: CanvasCamera = {
+  x: -168,
+  y: -104,
+};
 
 function nextCounter() {
   idCounter += 1;
@@ -26,6 +51,455 @@ export function createId(prefix: string) {
 
 export function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
+}
+
+export function getViewportFitScale(
+  viewport: { width: number; height: number },
+  content: { width: number; height: number },
+  padding = 16,
+  minScale = 0.36,
+) {
+  if (viewport.width <= 0 || viewport.height <= 0 || content.width <= 0 || content.height <= 0) {
+    return 1;
+  }
+
+  const widthRatio = Math.max(viewport.width - padding * 2, 1) / content.width;
+  const heightRatio = Math.max(viewport.height - padding * 2, 1) / content.height;
+  return clamp(Math.min(widthRatio, heightRatio, 1), minScale, 1);
+}
+
+export function worldToScreenPoint(point: CanvasPoint, camera: CanvasCamera): CanvasPoint {
+  return {
+    x: point.x - camera.x,
+    y: point.y - camera.y,
+  };
+}
+
+export function screenToWorldPoint(point: CanvasPoint, camera: CanvasCamera): CanvasPoint {
+  return {
+    x: point.x + camera.x,
+    y: point.y + camera.y,
+  };
+}
+
+export function panCanvasCamera(camera: CanvasCamera, delta: CanvasPoint): CanvasCamera {
+  return {
+    x: Math.round(camera.x - delta.x),
+    y: Math.round(camera.y - delta.y),
+  };
+}
+
+export function getCanvasViewportCenter(camera: CanvasCamera, viewport: { width: number; height: number }) {
+  return {
+    x: Math.round(camera.x + viewport.width / 2),
+    y: Math.round(camera.y + viewport.height / 2),
+  };
+}
+
+export function getCanvasGridOffset(camera: CanvasCamera, cellSize: number) {
+  const normalise = (value: number) => {
+    const remainder = value % cellSize;
+    return remainder > 0 ? remainder - cellSize : remainder;
+  };
+
+  return {
+    x: normalise(-camera.x),
+    y: normalise(-camera.y),
+  };
+}
+
+function toCanvasType(item: PaletteItem): CanvasItemType {
+  if (item === "column") {
+    return "column-shell";
+  }
+
+  if (item === "board") {
+    return "board-card";
+  }
+
+  if (item === "upload") {
+    return "image";
+  }
+
+  return "note";
+}
+
+function canvasDimensions(type: CanvasItemType) {
+  return CANVAS_ITEM_DIMENSIONS[type];
+}
+
+export function getCanvasSourceKey(source?: CanvasItemSource) {
+  return source ? `${source.kind}:${source.id}` : null;
+}
+
+export function nextCanvasZIndex(items: CanvasItem[]) {
+  return items.reduce((highest, item) => Math.max(highest, item.zIndex), 0) + 1;
+}
+
+export function clampCanvasPosition(
+  point: CanvasPoint,
+  size: { width: number; height: number },
+  bounds: CanvasBounds,
+) {
+  return {
+    x: clamp(point.x, 0, Math.max(bounds.width - size.width, 0)),
+    y: clamp(point.y, 0, Math.max(bounds.height - size.height, 0)),
+  };
+}
+
+export function bringCanvasItemToFront(items: CanvasItem[], itemId: string) {
+  const nextZIndex = nextCanvasZIndex(items);
+  return items.map((item) => (item.id === itemId ? { ...item, zIndex: nextZIndex } : item));
+}
+
+export function updateCanvasItemPosition(
+  items: CanvasItem[],
+  itemId: string,
+  point: CanvasPoint,
+) {
+  return items.map((item) => {
+    if (item.id !== itemId) {
+      return item;
+    }
+
+    return {
+      ...item,
+      x: Math.round(point.x),
+      y: Math.round(point.y),
+    };
+  });
+}
+
+export function updateCanvasItem(
+  items: CanvasItem[],
+  itemId: string,
+  updater: (item: CanvasItem) => CanvasItem,
+) {
+  return items.map((item) => (item.id === itemId ? updater(item) : item));
+}
+
+function baseCanvasPointForColumn(columnIndex: number): CanvasPoint {
+  return {
+    x: 80 + columnIndex * 340,
+    y: 92,
+  };
+}
+
+function baseCanvasPointForCard(columnIndex: number, cardIndex: number): CanvasPoint {
+  return {
+    x: 112 + columnIndex * 340,
+    y: 260 + cardIndex * 234,
+  };
+}
+
+function createSourceCanvasItem(
+  source: CanvasItemSource,
+  data: {
+    type: CanvasItemType;
+    title: string;
+    content: string;
+    label: string;
+  },
+  point: CanvasPoint,
+  zIndex: number,
+): CanvasItem {
+  const dimensions = canvasDimensions(data.type);
+  const nextPoint = {
+    x: Math.round(point.x),
+    y: Math.round(point.y),
+  };
+
+  if (data.type === "image") {
+    return {
+      id: createId("canvas-image"),
+      type: "image",
+      title: data.title,
+      caption: data.content,
+      imageUrl: "",
+      label: data.label,
+      zIndex,
+      source,
+      ...dimensions,
+      ...nextPoint,
+    };
+  }
+
+  if (data.type === "column-shell") {
+    return {
+      id: createId("canvas-column"),
+      type: "column-shell",
+      title: data.title,
+      content: data.content,
+      label: data.label,
+      zIndex,
+      source,
+      ...dimensions,
+      ...nextPoint,
+    };
+  }
+
+  if (data.type === "board-card") {
+    return {
+      id: createId("canvas-board-card"),
+      type: "board-card",
+      title: data.title,
+      content: data.content,
+      label: data.label,
+      zIndex,
+      source,
+      ...dimensions,
+      ...nextPoint,
+    };
+  }
+
+  return {
+    id: createId("canvas-note"),
+    type: "note",
+    title: data.title,
+    content: data.content,
+    label: data.label,
+    zIndex,
+    source,
+    ...dimensions,
+    ...nextPoint,
+  };
+}
+
+export function createCanvasItemFromPalette(
+  item: PaletteItem,
+  point: CanvasPoint,
+  items: CanvasItem[],
+) {
+  const type = toCanvasType(item);
+  const dimensions = canvasDimensions(type);
+  const nextPoint = {
+    x: Math.round(point.x),
+    y: Math.round(point.y),
+  };
+
+  if (type === "image") {
+    return {
+      id: createId("canvas-image"),
+      type: "image",
+      title: "Image card",
+      caption: "Paste an image URL to preview media on the canvas.",
+      imageUrl: "",
+      label: "Image card",
+      zIndex: nextCanvasZIndex(items),
+      ...dimensions,
+      ...nextPoint,
+    } satisfies CanvasItem;
+  }
+
+  if (type === "column-shell") {
+    return {
+      id: createId("canvas-column"),
+      type: "column-shell",
+      title: "Column shell",
+      content: "Use this to stage a loose column concept outside the board lanes.",
+      label: "Column",
+      zIndex: nextCanvasZIndex(items),
+      ...dimensions,
+      ...nextPoint,
+    } satisfies CanvasItem;
+  }
+
+  if (type === "board-card") {
+    return {
+      id: createId("canvas-board-card"),
+      type: "board-card",
+      title: "Board card shell",
+      content: "A freeform card for planning structure before it becomes part of the board.",
+      label: "Board card",
+      zIndex: nextCanvasZIndex(items),
+      ...dimensions,
+      ...nextPoint,
+    } satisfies CanvasItem;
+  }
+
+  return {
+    id: createId("canvas-note"),
+    type: "note",
+    title: BLOCK_LABELS[item as BlockType],
+    content: `Draft ${BLOCK_LABELS[item as BlockType].toLowerCase()} content in a freeform note card.`,
+    label: BLOCK_LABELS[item as BlockType],
+    zIndex: nextCanvasZIndex(items),
+    ...dimensions,
+    ...nextPoint,
+  } satisfies CanvasItem;
+}
+
+export function syncCanvasItemsWithBoard(
+  board: BoardState,
+  items: CanvasItem[],
+  dismissedSourceKeys: string[] = [],
+) {
+  const dismissed = new Set(dismissedSourceKeys);
+  const currentBySourceKey = new Map<string, CanvasItem>();
+
+  for (const item of items) {
+    const sourceKey = getCanvasSourceKey(item.source);
+    if (sourceKey) {
+      currentBySourceKey.set(sourceKey, item);
+    }
+  }
+
+  const activeSourceKeys = new Set<string>();
+  const syncedSourceItems = new Map<string, CanvasItem>();
+  let nextZ = nextCanvasZIndex(items);
+
+  board.columns.forEach((column, columnIndex) => {
+    const columnSource: CanvasItemSource = { kind: "column", id: column.id };
+    const columnSourceKey = getCanvasSourceKey(columnSource);
+    if (columnSourceKey) {
+      activeSourceKeys.add(columnSourceKey);
+    }
+
+    if (!columnSourceKey || dismissed.has(columnSourceKey)) {
+      return;
+    }
+
+    const existingColumnShell = currentBySourceKey.get(columnSourceKey);
+    const columnShellContent = `${column.cards.length} ${
+      column.cards.length === 1 ? "card" : "cards"
+    } linked from board mode.`;
+    const nextColumnShellBase = createSourceCanvasItem(
+      columnSource,
+      {
+        type: "column-shell",
+        title: column.title,
+        content: columnShellContent,
+        label: "Column shell",
+      },
+      baseCanvasPointForColumn(columnIndex),
+      existingColumnShell?.zIndex ?? nextZ++,
+    );
+
+    syncedSourceItems.set(
+      columnSourceKey,
+      existingColumnShell
+          ? {
+              ...existingColumnShell,
+              type: "column-shell",
+              title: column.title,
+              content: columnShellContent,
+              label: "Column shell",
+            }
+          : nextColumnShellBase,
+    );
+
+    column.cards.forEach((card, cardIndex) => {
+      const cardSource: CanvasItemSource = { kind: "card", id: card.id };
+      const cardSourceKey = getCanvasSourceKey(cardSource);
+      if (cardSourceKey) {
+        activeSourceKeys.add(cardSourceKey);
+      }
+
+      if (!cardSourceKey || dismissed.has(cardSourceKey)) {
+        return;
+      }
+
+      const existingCardShell = currentBySourceKey.get(cardSourceKey);
+      const cardShellTitle = cardPreview(card) || "Board card";
+      const cardShellContent = `${column.title} column · ${card.blocks.length} ${
+        card.blocks.length === 1 ? "block" : "blocks"
+      }${card.collapsed ? " · collapsed" : ""}`;
+      const nextCardShellBase = createSourceCanvasItem(
+        cardSource,
+        {
+          type: "board-card",
+          title: cardShellTitle,
+          content: cardShellContent,
+          label: "Board card",
+        },
+        baseCanvasPointForCard(columnIndex, cardIndex),
+        existingCardShell?.zIndex ?? nextZ++,
+      );
+
+      syncedSourceItems.set(
+        cardSourceKey,
+        existingCardShell
+          ? {
+              ...existingCardShell,
+              type: "board-card",
+              title: cardShellTitle,
+              content: cardShellContent,
+              label: "Board card",
+            }
+          : nextCardShellBase,
+      );
+    });
+  });
+
+  const nextItems = items
+    .filter((item) => {
+      const sourceKey = getCanvasSourceKey(item.source);
+      if (!sourceKey) {
+        return true;
+      }
+
+      return activeSourceKeys.has(sourceKey) && !dismissed.has(sourceKey);
+    })
+    .map((item) => {
+      const sourceKey = getCanvasSourceKey(item.source);
+      return sourceKey ? syncedSourceItems.get(sourceKey) ?? item : item;
+    });
+
+  syncedSourceItems.forEach((item, sourceKey) => {
+    if (!currentBySourceKey.has(sourceKey)) {
+      nextItems.push(item);
+    }
+  });
+
+  return nextItems;
+}
+
+export function getCanvasResetCamera(
+  items: CanvasItem[],
+  viewport: { width: number; height: number },
+  preferred: CanvasCamera = DEFAULT_CANVAS_CAMERA,
+): CanvasCamera {
+  if (viewport.width <= 0 || viewport.height <= 0 || items.length === 0) {
+    return preferred;
+  }
+
+  const sortedItems = [...items].sort((left, right) => {
+    if (left.source && !right.source) {
+      return -1;
+    }
+
+    if (!left.source && right.source) {
+      return 1;
+    }
+
+    if (left.y !== right.y) {
+      return left.y - right.y;
+    }
+
+    if (left.x !== right.x) {
+      return left.x - right.x;
+    }
+
+    return left.id.localeCompare(right.id);
+  });
+
+  const anchorItem = sortedItems[0];
+  const anchorScreenPosition = worldToScreenPoint(anchorItem, preferred);
+  const visibilityPadding = 72;
+  const isAnchorVisible =
+    anchorScreenPosition.x + anchorItem.width > visibilityPadding &&
+    anchorScreenPosition.y + anchorItem.height > visibilityPadding &&
+    anchorScreenPosition.x < viewport.width - visibilityPadding &&
+    anchorScreenPosition.y < viewport.height - visibilityPadding;
+
+  if (isAnchorVisible) {
+    return preferred;
+  }
+
+  return {
+    x: Math.round(anchorItem.x - (viewport.width - anchorItem.width) / 2),
+    y: Math.round(anchorItem.y - (viewport.height - anchorItem.height) / 2),
+  };
 }
 
 function formatFileSize(bytes: number) {

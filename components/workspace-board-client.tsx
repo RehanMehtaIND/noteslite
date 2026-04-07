@@ -19,11 +19,13 @@ import type {
   PaletteItem,
 } from "@/components/workspace-board/types";
 import {
+  DEFAULT_CANVAS_CAMERA,
   addBlockToCard,
   clamp,
   countCards,
   createBlock,
   createCard,
+  createCanvasItemFromPalette,
   createColumn,
   createSeedBoard,
   deleteBlock,
@@ -34,6 +36,7 @@ import {
   moveColumn,
   reorderBlockInCard,
   renameColumn,
+  syncCanvasItemsWithBoard,
   toggleCardCollapsed,
   updateBlock,
   withUpdatedColumns,
@@ -170,10 +173,12 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
   const router = useRouter();
 
   const [board, setBoard] = useState(() => createSeedBoard(workspaceId || "local-workspace"));
+  const [viewMode, setViewMode] = useState<CanvasViewMode>("board");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("New Workspace");
   const [selectedColumnId, setSelectedColumnId] = useState<string | null>(null);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [selectedCanvasItemId, setSelectedCanvasItemId] = useState<string | null>(null);
   const [editingColumnId, setEditingColumnId] = useState<string | null>(null);
   const [columnTitleDraft, setColumnTitleDraft] = useState("");
   const [draggingPaletteItem, setDraggingPaletteItem] = useState<PaletteItem | null>(null);
@@ -184,6 +189,10 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
 
   const updateBoard = useCallback((updater: (current: BoardState) => BoardState) => {
     setBoard((current) => updater(current));
+  }, []);
+
+  const updateCanvasItems = useCallback((updater: (current: CanvasItem[]) => CanvasItem[]) => {
+    setCanvasItems((current) => updater(current));
   }, []);
 
   const resolvedSelectedColumnId = useMemo(() => {
@@ -293,6 +302,11 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
 
   const onPaletteItemClick = useCallback(
     (item: PaletteItem) => {
+      if (viewMode === "canvas") {
+        addCanvasItem(item);
+        return;
+      }
+
       if (item === "column") {
         addNewColumn();
         return;
@@ -798,6 +812,42 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
           </div>
         </div>
       </div>
+
+      <button
+        type="button"
+        aria-label={viewMode === "board" ? "Switch to canvas view" : "Switch to board view"}
+        onClick={() => setViewMode((current) => (current === "board" ? "canvas" : "board"))}
+        className="fixed bottom-5 right-5 z-20 inline-flex h-[78px] w-[78px] flex-col items-center justify-center rounded-full border border-[color:var(--board-border-accent)] bg-[rgba(255,255,255,0.92)] text-[color:var(--board-accent-strong)] shadow-[0_18px_34px_rgba(47,43,40,0.16)] transition-[transform,box-shadow,border-color,background-color,color] duration-[var(--board-motion-base)] ease-[var(--board-ease-standard)] hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_24px_42px_rgba(47,43,40,0.18)] active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--board-focus-ring)]"
+      >
+        <span
+          aria-hidden="true"
+          className={`mb-1 grid ${viewMode === "board" ? "grid-cols-2 gap-[3px]" : "grid-cols-3 gap-[2.5px]"}`}
+        >
+          {viewMode === "board" ? (
+            <>
+              <span className="h-[7px] w-[7px] rounded-[2px] bg-current" />
+              <span className="h-[7px] w-[7px] rounded-[2px] bg-current opacity-70" />
+              <span className="h-[7px] w-[7px] rounded-[2px] bg-current opacity-85" />
+              <span className="h-[7px] w-[7px] rounded-[2px] bg-current opacity-55" />
+            </>
+          ) : (
+            <>
+              <span className="h-[4px] w-[4px] rounded-full bg-current" />
+              <span className="h-[4px] w-[4px] rounded-full bg-current opacity-60" />
+              <span className="h-[4px] w-[4px] rounded-full bg-current opacity-85" />
+              <span className="h-[4px] w-[4px] rounded-full bg-current opacity-75" />
+              <span className="h-[4px] w-[4px] rounded-full bg-current opacity-95" />
+              <span className="h-[4px] w-[4px] rounded-full bg-current opacity-70" />
+            </>
+          )}
+        </span>
+        <span className="text-[9px] font-semibold uppercase tracking-[0.18em]">
+          {viewMode === "board" ? "Canvas" : "Board"}
+        </span>
+        <span className="mt-0.5 text-[8px] uppercase tracking-[0.16em] text-[color:var(--board-text-soft)]">
+          View
+        </span>
+      </button>
     </div>
   );
 }
