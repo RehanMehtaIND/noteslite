@@ -38,7 +38,6 @@ export const SIDEBAR_SECTIONS: SidebarSection[] = [
     title: "Structure",
     items: [
       { id: "column", label: "Column" },
-      { id: "board", label: "Board" },
       { id: "line", label: "Line" },
     ],
   },

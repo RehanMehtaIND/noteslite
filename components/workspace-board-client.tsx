@@ -1,20 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type DragEvent,
+} from "react";
 import { useRouter } from "next/navigation";
 
-import { BoardSidebar } from "@/components/workspace-board/board-sidebar";
 import { BoardCard } from "@/components/workspace-board/board-card";
-import { CanvasView } from "@/components/workspace-board/canvas-view";
-import { WorkspaceHeader } from "@/components/workspace-board/workspace-header";
+import { BoardSidebar } from "@/components/workspace-board/board-sidebar";
+import { BLOCK_LABELS } from "@/components/workspace-board/constants";
 import type {
   BlockType,
   BoardState,
-  CanvasCamera,
-  CanvasItem,
-  CanvasPoint,
-  CanvasUiMode,
-  CanvasViewMode,
   PaletteItem,
 } from "@/components/workspace-board/types";
 import {
@@ -31,22 +32,47 @@ import {
   deleteCard,
   duplicateBlock,
   duplicateCard,
-  getCanvasSourceKey,
-  moveBlock,
   moveCard,
+  moveColumn,
+  reorderBlockInCard,
   renameColumn,
   syncCanvasItemsWithBoard,
   toggleCardCollapsed,
   updateBlock,
   withUpdatedColumns,
 } from "@/components/workspace-board/utils";
+import { WorkspaceHeader } from "@/components/workspace-board/workspace-header";
 
 const PALETTE_MIME = "application/x-noteslite-palette";
 const CARD_MIME = "application/x-noteslite-card";
+const COLUMN_MIME = "application/x-noteslite-column";
+const BOARD_COLUMN_WIDTH = 332;
+const BOARD_COLUMN_MIN_HEIGHT = 580;
+const BOARD_LANE_GAP = 10;
 
 type DragCardPayload = {
   cardId: string;
   fromColumnId: string;
+};
+
+type DragColumnPayload = {
+  columnId: string;
+};
+
+type DropGuideProps = {
+  isVisible: boolean;
+  isActive: boolean;
+  label: string;
+  onDragOver: (event: DragEvent<HTMLDivElement>) => void;
+  onDrop: (event: DragEvent<HTMLDivElement>) => void;
+};
+
+type ColumnDropZoneProps = {
+  isVisible: boolean;
+  isActive: boolean;
+  label: string;
+  onDragOver: (event: DragEvent<HTMLDivElement>) => void;
+  onDrop: (event: DragEvent<HTMLDivElement>) => void;
 };
 
 function parseCardPayload(raw: string): DragCardPayload | null {
@@ -62,8 +88,85 @@ function parseCardPayload(raw: string): DragCardPayload | null {
   }
 }
 
+function parseColumnPayload(raw: string) {
+  try {
+    const parsed = JSON.parse(raw) as Partial<DragColumnPayload>;
+    if (!parsed.columnId) {
+      return null;
+    }
+
+    return { columnId: parsed.columnId };
+  } catch {
+    return null;
+  }
+}
+
 function isBlockType(item: PaletteItem): item is BlockType {
   return item !== "column" && item !== "board";
+}
+
+function describeDropAction(item: PaletteItem | null) {
+  if (!item) {
+    return "Move card here";
+  }
+
+  if (item === "column") {
+    return "Add new column";
+  }
+
+  if (item === "board") {
+    return "Add card here";
+  }
+
+  return `Add ${BLOCK_LABELS[item].toLowerCase()} here`;
+}
+
+function DropGuide({ isVisible, isActive, label, onDragOver, onDrop }: DropGuideProps) {
+  return (
+    <div
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      aria-hidden="true"
+      className={`flex h-5 items-center justify-center rounded-full border border-dashed px-2 transition-[border-color,background-color,box-shadow,opacity,transform] duration-[var(--board-motion-fast)] ease-[var(--board-ease-standard)] ${
+        isVisible
+          ? isActive
+            ? "border-[color:var(--board-drag-guide-active)] bg-[var(--board-accent-soft)] shadow-[0_0_0_1px_var(--board-accent-glow)]"
+            : "border-[color:var(--board-drag-guide-passive)] bg-[rgba(255,255,255,0.5)]"
+          : "border-transparent bg-transparent hover:border-[color:var(--board-drag-guide-passive)] hover:bg-[rgba(255,255,255,0.5)]"
+      } ${isActive ? "scale-100 opacity-100" : "opacity-100"}`}
+    >
+      <span
+        className={`text-[9px] font-semibold uppercase tracking-[0.18em] text-[color:var(--board-accent-strong)] transition-opacity duration-[var(--board-motion-fast)] ease-[var(--board-ease-standard)] ${
+          isActive ? "opacity-100" : "opacity-0"
+        }`}
+      >
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function ColumnDropZone({ isVisible, isActive, label, onDragOver, onDrop }: ColumnDropZoneProps) {
+  return (
+    <div
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      aria-hidden="true"
+      className="flex w-6 shrink-0 self-stretch items-stretch justify-center overflow-hidden"
+    >
+      <div
+        className={`flex w-full min-w-[14px] items-center justify-center rounded-full border border-dashed transition-[border-color,background-color,box-shadow,opacity] duration-[var(--board-motion-fast)] ease-[var(--board-ease-standard)] ${
+          isVisible
+            ? isActive
+            ? "border-[color:var(--board-drag-guide-active)] bg-[var(--board-accent-soft)] shadow-[0_0_0_1px_var(--board-accent-glow)]"
+            : "border-[color:var(--board-drag-guide-passive)] bg-[rgba(255,255,255,0.42)]"
+            : "opacity-0"
+        }`}
+      >
+        <span className={`sr-only ${isActive ? "not-sr-only" : ""}`}>{label}</span>
+      </div>
+    </div>
+  );
 }
 
 export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: string }) {
@@ -80,16 +183,9 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
   const [columnTitleDraft, setColumnTitleDraft] = useState("");
   const [draggingPaletteItem, setDraggingPaletteItem] = useState<PaletteItem | null>(null);
   const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
+  const [draggingColumnId, setDraggingColumnId] = useState<string | null>(null);
   const [activeDropKey, setActiveDropKey] = useState<string | null>(null);
-  const [canvasItems, setCanvasItems] = useState<CanvasItem[]>([]);
-  const [canvasCamera, setCanvasCamera] = useState<CanvasCamera>(DEFAULT_CANVAS_CAMERA);
-  const [canvasUiMode, setCanvasUiMode] = useState<CanvasUiMode>("expanded");
-  const [dismissedCanvasSourceKeys, setDismissedCanvasSourceKeys] = useState<string[]>([]);
-  const [lastCanvasPoint, setLastCanvasPoint] = useState<CanvasPoint>({
-    x: 320,
-    y: 220,
-  });
-  const canvasItemsRef = useRef<CanvasItem[]>(canvasItems);
+  const [activeColumnDropIndex, setActiveColumnDropIndex] = useState<number | null>(null);
 
   const updateBoard = useCallback((updater: (current: BoardState) => BoardState) => {
     setBoard((current) => updater(current));
@@ -120,45 +216,22 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
   const cardsCount = useMemo(() => countCards(board), [board]);
 
   useEffect(() => {
-    setCanvasItems((current) => syncCanvasItemsWithBoard(board, current, dismissedCanvasSourceKeys));
-  }, [board, dismissedCanvasSourceKeys]);
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousBodyOverscroll = document.body.style.overscrollBehavior;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    const previousHtmlOverscroll = document.documentElement.style.overscrollBehavior;
 
-  useEffect(() => {
-    canvasItemsRef.current = canvasItems;
-  }, [canvasItems]);
+    document.body.style.overflow = "hidden";
+    document.body.style.overscrollBehavior = "none";
+    document.documentElement.style.overflow = "hidden";
+    document.documentElement.style.overscrollBehavior = "none";
 
-  useEffect(() => {
-    if (selectedCanvasItemId && !canvasItems.some((item) => item.id === selectedCanvasItemId)) {
-      setSelectedCanvasItemId(null);
-    }
-  }, [canvasItems, selectedCanvasItemId]);
-
-  const addCanvasItem = useCallback(
-    (item: PaletteItem, point?: CanvasPoint) => {
-      const spawnPoint = point ?? lastCanvasPoint;
-      const nextItem = createCanvasItemFromPalette(item, spawnPoint, canvasItemsRef.current);
-      const nextItems = [...canvasItemsRef.current, nextItem];
-      canvasItemsRef.current = nextItems;
-      setCanvasItems(nextItems);
-      setSelectedCanvasItemId(nextItem.id);
-    },
-    [lastCanvasPoint],
-  );
-
-  const deleteCanvasItem = useCallback((itemId: string) => {
-    const itemToRemove = canvasItemsRef.current.find((item) => item.id === itemId);
-    const removedSourceKey = getCanvasSourceKey(itemToRemove?.source);
-    const nextItems = canvasItemsRef.current.filter((item) => item.id !== itemId);
-    canvasItemsRef.current = nextItems;
-    setCanvasItems(nextItems);
-
-    if (removedSourceKey) {
-      setDismissedCanvasSourceKeys((current) =>
-        current.includes(removedSourceKey) ? current : [...current, removedSourceKey],
-      );
-    }
-
-    setSelectedCanvasItemId((current) => (current === itemId ? null : current));
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.body.style.overscrollBehavior = previousBodyOverscroll;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      document.documentElement.style.overscrollBehavior = previousHtmlOverscroll;
+    };
   }, []);
 
   const insertCardAt = useCallback(
@@ -255,17 +328,17 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
     },
     [
       addBlockFromSidebar,
-      addCanvasItem,
       addCardToColumn,
       addNewColumn,
       board.columns,
       resolvedSelectedColumnId,
-      viewMode,
     ],
   );
 
   const onPaletteDragStart = useCallback((event: DragEvent<HTMLButtonElement>, item: PaletteItem) => {
     setDraggingPaletteItem(item);
+    setDraggingCardId(null);
+    setDraggingColumnId(null);
     event.dataTransfer.effectAllowed = "copy";
     event.dataTransfer.setData(PALETTE_MIME, item);
   }, []);
@@ -273,12 +346,14 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
   const onPaletteDragEnd = useCallback(() => {
     setDraggingPaletteItem(null);
     setActiveDropKey(null);
+    setActiveColumnDropIndex(null);
   }, []);
 
   const onCardDragStart = useCallback(
     (event: DragEvent<HTMLButtonElement>, cardId: string, fromColumnId: string) => {
       setDraggingCardId(cardId);
       setDraggingPaletteItem(null);
+      setDraggingColumnId(null);
       event.dataTransfer.effectAllowed = "move";
       event.dataTransfer.setData(CARD_MIME, JSON.stringify({ cardId, fromColumnId } satisfies DragCardPayload));
     },
@@ -288,14 +363,46 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
   const onCardDragEnd = useCallback(() => {
     setDraggingCardId(null);
     setActiveDropKey(null);
+    setActiveColumnDropIndex(null);
+  }, []);
+
+  const onColumnDragStart = useCallback((event: DragEvent<HTMLButtonElement>, columnId: string) => {
+    setDraggingColumnId(columnId);
+    setDraggingCardId(null);
+    setDraggingPaletteItem(null);
+    setActiveDropKey(null);
+    setSelectedColumnId(columnId);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData(COLUMN_MIME, JSON.stringify({ columnId } satisfies DragColumnPayload));
+  }, []);
+
+  const onColumnDragEnd = useCallback(() => {
+    setDraggingColumnId(null);
+    setActiveColumnDropIndex(null);
   }, []);
 
   const allowDrop = useCallback(
     (event: DragEvent<HTMLElement>) => {
+      if (draggingColumnId) {
+        return;
+      }
+
       event.preventDefault();
       event.dataTransfer.dropEffect = draggingPaletteItem ? "copy" : "move";
     },
-    [draggingPaletteItem],
+    [draggingColumnId, draggingPaletteItem],
+  );
+
+  const allowColumnDrop = useCallback(
+    (event: DragEvent<HTMLElement>) => {
+      if (!draggingColumnId) {
+        return;
+      }
+
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+    },
+    [draggingColumnId],
   );
 
   const onDropAtIndex = useCallback(
@@ -332,6 +439,24 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
     [addNewColumn, insertCardAt, updateBoard],
   );
 
+  const onColumnDropAtIndex = useCallback(
+    (event: DragEvent<HTMLElement>, targetIndex: number) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setActiveColumnDropIndex(null);
+
+      const columnPayload = parseColumnPayload(event.dataTransfer.getData(COLUMN_MIME));
+      if (!columnPayload) {
+        return;
+      }
+
+      updateBoard((current) => moveColumn(current, columnPayload.columnId, targetIndex));
+      setSelectedColumnId(columnPayload.columnId);
+      setDraggingColumnId(null);
+    },
+    [updateBoard],
+  );
+
   const startEditingWorkspaceTitle = useCallback(() => {
     setTitleDraft(board.title || "New Workspace");
     setIsEditingTitle(true);
@@ -359,220 +484,332 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
     [columnTitleDraft, updateBoard],
   );
 
-  const showDropGuides = draggingCardId !== null || draggingPaletteItem !== null;
+  const showCardDropGuides = draggingCardId !== null || draggingPaletteItem !== null;
+  const showColumnDropGuides = draggingColumnId !== null;
+  const activeDropLabel = describeDropAction(draggingPaletteItem);
+  const boardStageStyle = useMemo(
+    () =>
+      ({
+        "--board-column-width": `${BOARD_COLUMN_WIDTH}px`,
+        "--board-column-min-height": `${BOARD_COLUMN_MIN_HEIGHT}px`,
+        "--board-lane-gap": `${BOARD_LANE_GAP}px`,
+      }) as CSSProperties & Record<string, string | number>,
+    [],
+  );
 
   return (
-    <div className="workspace-board-theme relative min-h-screen overflow-x-auto bg-[var(--board-canvas)] p-4 text-[#3d4047]">
-      <div className="mx-auto w-[min(1880px,100%)] rounded-[22px] border border-[rgba(255,255,255,0.85)] bg-[rgba(244,244,246,0.95)] p-3 [box-shadow:0_16px_28px_rgba(73,59,49,0.26)]">
-        <div className="grid gap-4 xl:grid-cols-[minmax(232px,248px)_1fr]">
-          <BoardSidebar
-            onBack={() => router.push("/dashboard")}
-            onPaletteDragStart={onPaletteDragStart}
-            onPaletteDragEnd={onPaletteDragEnd}
-            onPaletteClick={onPaletteItemClick}
-          />
+    <div className="workspace-board-theme workspace-board-viewport fixed inset-0 overflow-hidden bg-[var(--board-canvas)] text-[color:var(--board-text)]">
+      <div
+        className="workspace-board-stage absolute inset-[var(--board-fit-padding)]"
+        style={boardStageStyle}
+      >
+        <div className="relative h-full w-full">
+          <div className="relative h-full overflow-hidden rounded-[30px] border border-[color:var(--board-shell-border)] bg-[var(--board-shell-bg)] p-4 shadow-[var(--board-shadow-shell)] backdrop-blur-xl">
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-44 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.82),transparent_58%)]" />
+            <div className="pointer-events-none absolute -right-20 top-10 h-48 w-48 rounded-full bg-[rgba(134,100,73,0.12)] blur-3xl" />
+            <div className="pointer-events-none absolute bottom-0 left-10 h-52 w-52 rounded-full bg-[rgba(86,106,132,0.08)] blur-3xl" />
 
-          <section className="overflow-hidden rounded-[20px] border border-[rgba(0,0,0,0.16)] bg-[linear-gradient(180deg,#d3d6df_0%,#cdd0da_100%)] px-5 pb-4 pt-4">
-            <WorkspaceHeader
-              title={board.title}
-              draftTitle={titleDraft}
-              isEditingTitle={isEditingTitle}
-              cardsCount={cardsCount}
-              columnsCount={board.columns.length}
-              isSyncing={false}
-              onStartEditingTitle={startEditingWorkspaceTitle}
-              onCancelEditingTitle={cancelEditingWorkspaceTitle}
-              onDraftTitleChange={setTitleDraft}
-              onCommitTitle={commitWorkspaceTitle}
-            />
+            <div className="relative grid h-full min-h-0 grid-cols-[176px_minmax(0,1fr)] items-stretch gap-5">
+              <BoardSidebar
+                onBack={() => router.push("/dashboard")}
+                onPaletteDragStart={onPaletteDragStart}
+                onPaletteDragEnd={onPaletteDragEnd}
+                onPaletteClick={onPaletteItemClick}
+                draggingItem={draggingPaletteItem}
+              />
 
-            {viewMode === "board" ? (
-              <div className="overflow-x-auto pb-2">
-                <div className="flex min-w-max items-start gap-3">
-                  {board.columns.map((column) => {
-                    const isColumnSelected = resolvedSelectedColumnId === column.id;
-                    const isEditingColumn = editingColumnId === column.id;
+              <section className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[28px] border border-[color:var(--board-border)] bg-[var(--board-panel-bg)] px-4 pb-4 pt-4 shadow-[var(--board-shadow-panel)]">
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.52),transparent_72%)]" />
 
-                    return (
-                      <article
-                        key={column.id}
-                        tabIndex={0}
-                        onClick={() => {
-                          setSelectedColumnId(column.id);
-                          setSelectedCardId(null);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            setSelectedColumnId(column.id);
-                            setSelectedCardId(null);
-                          }
-                        }}
-                        className={`min-h-[620px] w-[320px] rounded-[14px] border p-[10px] transition-colors focus-visible:outline-none ${
-                          isColumnSelected
-                            ? "border-[#4e5460] bg-[rgba(238,238,240,0.9)] ring-1 ring-[#6a7182]/25"
-                            : "border-[rgba(0,0,0,0.2)] bg-[rgba(238,238,240,0.8)]"
-                        }`}
-                      >
-                      <div
-                        onDoubleClick={(event) => {
-                          event.stopPropagation();
-                          setEditingColumnId(column.id);
-                          setColumnTitleDraft(column.title);
-                        }}
-                        className="mb-3 rounded-[10px] border border-[rgba(0,0,0,0.18)] bg-white/70 px-2 py-2 text-center text-[14px] font-semibold tracking-[0.08em] text-[#4a4d55]"
-                      >
-                        {isEditingColumn ? (
-                          <input
-                            autoFocus
-                            value={columnTitleDraft}
-                            onChange={(event) => setColumnTitleDraft(event.target.value)}
-                            onBlur={() => commitColumnRename(column.id)}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter") {
-                                event.preventDefault();
-                                commitColumnRename(column.id);
-                              }
+                <div className="relative flex min-h-0 flex-1 flex-col">
+                  <WorkspaceHeader
+                    title={board.title}
+                    draftTitle={titleDraft}
+                    isEditingTitle={isEditingTitle}
+                    viewLabel="Board view"
+                    cardsCount={cardsCount}
+                    columnsCount={board.columns.length}
+                    isSyncing={false}
+                    onStartEditingTitle={startEditingWorkspaceTitle}
+                    onCancelEditingTitle={cancelEditingWorkspaceTitle}
+                    onDraftTitleChange={setTitleDraft}
+                    onCommitTitle={commitWorkspaceTitle}
+                  />
 
-                              if (event.key === "Escape") {
-                                event.preventDefault();
-                                setEditingColumnId(null);
-                                setColumnTitleDraft("");
-                              }
-                            }}
-                            className="h-8 w-full rounded-[8px] border border-[rgba(0,0,0,0.22)] bg-white/80 px-2 text-center text-[14px] font-semibold tracking-[0.08em] text-[#4a4d55] outline-none"
-                          />
-                        ) : (
-                          column.title
-                        )}
-                      </div>
+                  <div className="mt-2.5 min-h-0 min-w-0 flex-1 overflow-hidden">
+                      <div className="workspace-board-scroll h-full min-h-0 min-w-0 overflow-x-auto overflow-y-hidden pb-2 pl-1 pr-1 touch-pan-x">
+                        <div className="flex h-full min-h-full w-max min-w-full items-stretch gap-[var(--board-lane-gap)] pb-1">
+                          {board.columns.map((column, columnIndex) => {
+                        const isColumnSelected = resolvedSelectedColumnId === column.id;
+                        const isEditingColumn = editingColumnId === column.id;
+                        const isColumnCardDropTarget =
+                          showCardDropGuides && activeDropKey?.startsWith(`${column.id}:`);
+                        const isColumnDragging = draggingColumnId === column.id;
 
-                      <div className="space-y-2">
-                        <div
-                          className={`h-2 rounded transition-colors ${
-                            showDropGuides
-                              ? activeDropKey === `${column.id}:0`
-                                ? "bg-[#6a72ff]"
-                                : "bg-[#7a80d4]/45"
-                              : "bg-transparent hover:bg-[#7a80d4]/30"
-                          }`}
-                          onDragOver={(event) => {
-                            allowDrop(event);
-                            if (showDropGuides) {
-                              setActiveDropKey(`${column.id}:0`);
-                            }
-                          }}
-                          onDrop={(event) => onDropAtIndex(event, column.id, 0)}
-                          aria-hidden="true"
-                        />
+                        return (
+                          <div key={column.id} className="flex h-full min-h-0 shrink-0 flex-none items-stretch gap-[var(--board-lane-gap)]">
+                            <ColumnDropZone
+                              isVisible={showColumnDropGuides}
+                              isActive={activeColumnDropIndex === columnIndex}
+                              label="Move column here"
+                              onDragOver={(event) => {
+                                allowColumnDrop(event);
+                                if (showColumnDropGuides) {
+                                  setActiveColumnDropIndex(columnIndex);
+                                }
+                              }}
+                              onDrop={(event) => onColumnDropAtIndex(event, columnIndex)}
+                            />
 
-                        {column.cards.length > 0 ? (
-                          column.cards.map((card, index) => (
-                            <div key={card.id} className="space-y-2">
-                              <BoardCard
-                                card={card}
-                                isSelected={selectedCardId === card.id}
-                                isDragging={draggingCardId === card.id}
-                                onSelect={() => {
+                            <article
+                              tabIndex={0}
+                              aria-label={`${column.title} column`}
+                              onClick={() => {
+                                setSelectedColumnId(column.id);
+                                setSelectedCardId(null);
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
                                   setSelectedColumnId(column.id);
-                                  setSelectedCardId(card.id);
-                                }}
-                                onDragStart={(event) => onCardDragStart(event, card.id, column.id)}
-                                onDragEnd={onCardDragEnd}
-                                onDelete={() => {
-                                  updateBoard((current) => deleteCard(current, card.id));
-                                  setSelectedCardId((current) => (current === card.id ? null : current));
-                                }}
-                                onDuplicate={() => updateBoard((current) => duplicateCard(current, card.id))}
-                                onToggleCollapsed={() =>
-                                  updateBoard((current) => toggleCardCollapsed(current, card.id))
+                                  setSelectedCardId(null);
                                 }
-                                onAddBlock={(type) =>
-                                  updateBoard((current) => addBlockToCard(current, card.id, type))
-                                }
-                                onUpdateBlock={(blockId, updater) =>
-                                  updateBoard((current) => updateBlock(current, card.id, blockId, updater))
-                                }
-                                onDeleteBlock={(blockId) =>
-                                  updateBoard((current) => deleteBlock(current, card.id, blockId))
-                                }
-                                onDuplicateBlock={(blockId) =>
-                                  updateBoard((current) => duplicateBlock(current, card.id, blockId))
-                                }
-                                onMoveBlock={(blockId, direction) =>
-                                  updateBoard((current) => moveBlock(current, card.id, blockId, direction))
-                                }
-                              />
-
-                              <div
-                                className={`h-2 rounded transition-colors ${
-                                  showDropGuides
-                                    ? activeDropKey === `${column.id}:${index + 1}`
-                                      ? "bg-[#6a72ff]"
-                                      : "bg-[#7a80d4]/45"
-                                    : "bg-transparent hover:bg-[#7a80d4]/30"
+                              }}
+                              className={`relative flex h-full min-h-0 max-h-full w-[var(--board-column-width)] shrink-0 flex-none flex-col overflow-hidden rounded-[24px] border p-3 pt-[calc(var(--board-column-handle-size)+0.95rem)] transition-[border-color,background-color,box-shadow,transform,opacity] duration-[var(--board-motion-base)] ease-[var(--board-ease-standard)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--board-focus-ring)] ${
+                                isColumnCardDropTarget
+                                  ? "border-[color:var(--board-border-accent)] bg-[rgba(246,246,248,0.92)] shadow-[0_20px_38px_rgba(71,86,109,0.14)]"
+                                  : isColumnSelected
+                                    ? "border-[color:var(--board-border-accent)] bg-[rgba(244,244,247,0.9)] shadow-[0_18px_36px_rgba(69,78,92,0.1)]"
+                                    : "border-[color:var(--board-border)] bg-[rgba(237,237,240,0.8)] hover:border-[color:var(--board-border-strong)]"
+                              } ${isColumnDragging ? "opacity-60" : "opacity-100"}`}
+                            >
+                              <button
+                                type="button"
+                                draggable
+                                aria-label="Drag column to reorder"
+                                onClick={(event) => event.stopPropagation()}
+                                onMouseDown={(event) => event.stopPropagation()}
+                                onKeyDown={(event) => event.stopPropagation()}
+                                onDragStart={(event) => onColumnDragStart(event, column.id)}
+                                onDragEnd={onColumnDragEnd}
+                                className={`absolute left-1/2 top-3 z-10 flex h-[var(--board-column-handle-size)] w-[var(--board-column-handle-size)] -translate-x-1/2 items-center justify-center gap-[var(--board-handle-dot-gap)] rounded-full border border-[color:var(--board-border)] bg-[color:var(--board-handle-surface)] text-[color:var(--board-handle-icon)] shadow-[0_10px_18px_rgba(47,43,40,0.12)] transition-[border-color,background-color,box-shadow,transform,color] duration-[var(--board-motion-fast)] ease-[var(--board-ease-standard)] hover:-translate-x-1/2 hover:-translate-y-px hover:border-[color:var(--board-border-strong)] hover:bg-[color:var(--board-handle-surface-pressed)] hover:shadow-[0_14px_22px_rgba(47,43,40,0.16)] active:-translate-x-1/2 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--board-focus-ring)] ${
+                                  isColumnDragging
+                                    ? "border-[color:var(--board-border-accent)] bg-[color:var(--board-handle-surface-pressed)] shadow-[0_14px_24px_rgba(47,43,40,0.18)]"
+                                    : ""
                                 }`}
-                                onDragOver={(event) => {
-                                  allowDrop(event);
-                                  if (showDropGuides) {
-                                    setActiveDropKey(`${column.id}:${index + 1}`);
-                                  }
-                                }}
-                                onDrop={(event) => onDropAtIndex(event, column.id, index + 1)}
-                                aria-hidden="true"
-                              />
-                            </div>
-                          ))
-                        ) : (
-                          <div
-                            className="rounded-[10px] border border-dashed border-[rgba(0,0,0,0.22)] bg-white/50 px-3 py-5 text-center text-[12px] tracking-[0.07em] text-[#6d717b]"
+                              >
+                                <span className="h-[var(--board-handle-dot-size)] w-[var(--board-handle-dot-size)] rounded-full bg-current" />
+                                <span className="h-[var(--board-handle-dot-size)] w-[var(--board-handle-dot-size)] rounded-full bg-current" />
+                                <span className="h-[var(--board-handle-dot-size)] w-[var(--board-handle-dot-size)] rounded-full bg-current" />
+                              </button>
+
+                              <div className="mb-4 rounded-[20px] border border-[color:var(--board-border)] bg-[rgba(255,255,255,0.5)] p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
+                                <div
+                                  onDoubleClick={(event) => {
+                                    event.stopPropagation();
+                                    setEditingColumnId(column.id);
+                                    setColumnTitleDraft(column.title);
+                                  }}
+                                >
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="inline-flex h-[var(--board-status-pill-height)] items-center rounded-full border border-[color:var(--board-border)] bg-[rgba(255,255,255,0.72)] px-[var(--board-status-pill-px)] text-[9px] font-semibold uppercase leading-none tracking-[var(--board-status-pill-track)] text-[color:var(--board-text-soft)]">
+                                      Column
+                                    </span>
+                                    <span className="inline-flex h-[var(--board-status-pill-height)] items-center rounded-full border border-[color:var(--board-border)] bg-[var(--board-warm-soft)] px-[var(--board-status-pill-px)] text-[9px] font-medium uppercase leading-none tracking-[var(--board-status-pill-track)] text-[color:var(--board-warm)]">
+                                      {column.cards.length} {column.cards.length === 1 ? "card" : "cards"}
+                                    </span>
+                                    {isColumnSelected ? (
+                                      <span className="inline-flex h-[var(--board-status-pill-height)] items-center rounded-full border border-[color:var(--board-border-accent)] bg-[var(--board-accent-soft)] px-[var(--board-status-pill-px)] text-[9px] font-semibold uppercase leading-none tracking-[var(--board-status-pill-track)] text-[color:var(--board-accent-strong)]">
+                                        Selected
+                                      </span>
+                                    ) : null}
+                                    {isColumnCardDropTarget ? (
+                                      <span className="inline-flex h-[var(--board-status-pill-height)] items-center rounded-full border border-[color:var(--board-border-accent)] bg-[var(--board-accent-soft)] px-[var(--board-status-pill-px)] text-[9px] font-semibold uppercase leading-none tracking-[var(--board-status-pill-track)] text-[color:var(--board-accent-strong)]">
+                                        Drop target
+                                      </span>
+                                    ) : null}
+                                  </div>
+
+                                  <div className="mt-3">
+                                    {isEditingColumn ? (
+                                      <input
+                                        autoFocus
+                                        value={columnTitleDraft}
+                                        aria-label="Column title"
+                                        onChange={(event) => setColumnTitleDraft(event.target.value)}
+                                        onBlur={() => commitColumnRename(column.id)}
+                                        onKeyDown={(event) => {
+                                          if (event.key === "Enter") {
+                                            event.preventDefault();
+                                            commitColumnRename(column.id);
+                                          }
+
+                                          if (event.key === "Escape") {
+                                            event.preventDefault();
+                                            setEditingColumnId(null);
+                                            setColumnTitleDraft("");
+                                          }
+                                        }}
+                                        className="h-11 w-full rounded-[14px] border border-[color:var(--board-border-strong)] bg-[rgba(255,255,255,0.9)] px-3 text-[19px] font-semibold tracking-[0.03em] text-[color:var(--board-text-strong)] outline-none transition-[border-color,box-shadow] duration-[var(--board-motion-fast)] ease-[var(--board-ease-standard)] focus-visible:ring-2 focus-visible:ring-[color:var(--board-focus-ring)]"
+                                      />
+                                    ) : (
+                                      <h2 className="text-[20px] leading-tight tracking-[0.03em] text-[color:var(--board-text-strong)] [font-family:'Cormorant_Garamond','Times_New_Roman',serif]">
+                                        {column.title}
+                                      </h2>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <p className="mt-3 text-[12px] leading-5 text-[color:var(--board-text-soft)]">
+                                  {showColumnDropGuides
+                                    ? "Use the top handle to drag this column left or right."
+                                    : isColumnSelected
+                                      ? "Selected for quick add actions from the sidebar."
+                                      : column.cards.length === 0
+                                        ? "Ready for the first card."
+                                        : "Click or press Enter to target this column."}
+                                </p>
+                              </div>
+
+                              <div className="flex min-h-0 flex-1 flex-col">
+                                <div className="workspace-board-panel-scroll min-h-0 flex-1 space-y-3 overflow-y-auto pr-1 touch-pan-y">
+                                  <DropGuide
+                                    isVisible={showCardDropGuides}
+                                    isActive={activeDropKey === `${column.id}:0`}
+                                    label={activeDropLabel}
+                                    onDragOver={(event) => {
+                                      allowDrop(event);
+                                      if (showCardDropGuides) {
+                                        setActiveDropKey(`${column.id}:0`);
+                                      }
+                                    }}
+                                    onDrop={(event) => onDropAtIndex(event, column.id, 0)}
+                                  />
+
+                                  {column.cards.length > 0 ? (
+                                    column.cards.map((card, index) => (
+                                      <div key={card.id} className="space-y-3">
+                                        <BoardCard
+                                          card={card}
+                                          isSelected={selectedCardId === card.id}
+                                          isDragging={draggingCardId === card.id}
+                                          onSelect={() => {
+                                            setSelectedColumnId(column.id);
+                                            setSelectedCardId(card.id);
+                                          }}
+                                          onDragStart={(event) => onCardDragStart(event, card.id, column.id)}
+                                          onDragEnd={onCardDragEnd}
+                                          onDelete={() => {
+                                            updateBoard((current) => deleteCard(current, card.id));
+                                            setSelectedCardId((current) => (current === card.id ? null : current));
+                                          }}
+                                          onDuplicate={() => updateBoard((current) => duplicateCard(current, card.id))}
+                                          onToggleCollapsed={() =>
+                                            updateBoard((current) => toggleCardCollapsed(current, card.id))
+                                          }
+                                          onAddBlock={(type) =>
+                                            updateBoard((current) => addBlockToCard(current, card.id, type))
+                                          }
+                                          onUpdateBlock={(blockId, updater) =>
+                                            updateBoard((current) => updateBlock(current, card.id, blockId, updater))
+                                          }
+                                          onDeleteBlock={(blockId) =>
+                                            updateBoard((current) => deleteBlock(current, card.id, blockId))
+                                          }
+                                          onDuplicateBlock={(blockId) =>
+                                            updateBoard((current) => duplicateBlock(current, card.id, blockId))
+                                          }
+                                          onReorderBlock={(blockId, targetIndex) => {
+                                            updateBoard((current) =>
+                                              reorderBlockInCard(current, card.id, blockId, targetIndex),
+                                            );
+                                            setSelectedColumnId(column.id);
+                                            setSelectedCardId(card.id);
+                                          }}
+                                        />
+
+                                        <DropGuide
+                                          isVisible={showCardDropGuides}
+                                          isActive={activeDropKey === `${column.id}:${index + 1}`}
+                                          label={activeDropLabel}
+                                          onDragOver={(event) => {
+                                            allowDrop(event);
+                                            if (showCardDropGuides) {
+                                              setActiveDropKey(`${column.id}:${index + 1}`);
+                                            }
+                                          }}
+                                          onDrop={(event) => onDropAtIndex(event, column.id, index + 1)}
+                                        />
+                                      </div>
+                                    ))
+                                  ) : (
+                                    <div
+                                      onDragOver={(event) => {
+                                        allowDrop(event);
+                                        if (showCardDropGuides) {
+                                          setActiveDropKey(`${column.id}:0`);
+                                        }
+                                      }}
+                                      onDrop={(event) => onDropAtIndex(event, column.id, 0)}
+                                      className={`rounded-[20px] border border-dashed px-4 py-7 text-center transition-[border-color,background-color,box-shadow] duration-[var(--board-motion-fast)] ease-[var(--board-ease-standard)] ${
+                                        isColumnCardDropTarget
+                                          ? "border-[color:var(--board-border-accent)] bg-[var(--board-accent-soft)] shadow-[0_0_0_1px_var(--board-accent-glow)]"
+                                          : "border-[color:var(--board-border-strong)] bg-[rgba(255,255,255,0.58)]"
+                                      }`}
+                                    >
+                                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--board-text-soft)]">
+                                        Empty column
+                                      </p>
+                                      <p className="mt-2 text-[13px] leading-6 text-[color:var(--board-text-muted)]">
+                                        {showCardDropGuides
+                                          ? "Drop a card or block here to start this column."
+                                          : "Start with a note card or drag content here from the palette."}
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    addCardToColumn(column.id, "note");
+                                  }}
+                                  className="mt-4 flex min-h-[var(--board-action-chip-height-roomy)] w-full items-center justify-between rounded-[18px] border border-dashed border-[color:var(--board-border-strong)] bg-[rgba(255,255,255,0.74)] px-3.5 text-left transition-[border-color,background-color,box-shadow,color] duration-[var(--board-motion-fast)] ease-[var(--board-ease-standard)] hover:border-[color:var(--board-border-accent)] hover:bg-white hover:shadow-[0_10px_22px_rgba(76,84,101,0.1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--board-focus-ring)]"
+                                >
+                                  <span className="text-[10px] font-semibold uppercase leading-none tracking-[var(--board-action-chip-track)] text-[color:var(--board-accent-strong)]">
+                                    + New card
+                                  </span>
+                                  <span className="inline-flex h-[var(--board-status-pill-height)] items-center rounded-full border border-[color:var(--board-border)] bg-[rgba(255,255,255,0.7)] px-[var(--board-status-pill-px)] text-[9px] font-medium uppercase leading-none tracking-[var(--board-status-pill-track)] text-[color:var(--board-text-soft)]">
+                                    Starts with note
+                                  </span>
+                                </button>
+                              </div>
+                            </article>
+                          </div>
+                        );
+                          })}
+
+                          <ColumnDropZone
+                            isVisible={showColumnDropGuides}
+                            isActive={activeColumnDropIndex === board.columns.length}
+                            label="Move column to the end"
                             onDragOver={(event) => {
-                              allowDrop(event);
-                              if (showDropGuides) {
-                                setActiveDropKey(`${column.id}:0`);
+                              allowColumnDrop(event);
+                              if (showColumnDropGuides) {
+                                setActiveColumnDropIndex(board.columns.length);
                               }
                             }}
-                            onDrop={(event) => onDropAtIndex(event, column.id, 0)}
-                          >
-                            Drop blocks or cards here
-                          </div>
-                        )}
+                            onDrop={(event) => onColumnDropAtIndex(event, board.columns.length)}
+                          />
+                        </div>
                       </div>
-
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          addCardToColumn(column.id, "note");
-                        }}
-                        className="mt-3 h-9 rounded-[10px] border border-[rgba(61,66,75,0.2)] bg-white px-3 text-[12px] font-medium tracking-[0.04em] text-[#4f5664] transition-colors hover:bg-[rgba(245,246,248,0.96)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5f6a7a]/40"
-                      >
-                        + New Card
-                      </button>
-                      </article>
-                    );
-                  })}
+                    </div>
                 </div>
-              </div>
-            ) : (
-              <div className="min-h-[720px]">
-                <CanvasView
-                  items={canvasItems}
-                  camera={canvasCamera}
-                  uiMode={canvasUiMode}
-                  selectedItemId={selectedCanvasItemId}
-                  draggingPaletteItem={draggingPaletteItem}
-                  onSelectItem={setSelectedCanvasItemId}
-                  onItemsChange={updateCanvasItems}
-                  onCreateItem={addCanvasItem}
-                  onDeleteItem={deleteCanvasItem}
-                  onCanvasPointChange={setLastCanvasPoint}
-                  onCameraChange={setCanvasCamera}
-                  onCanvasUiModeChange={setCanvasUiMode}
-                />
-              </div>
-            )}
-          </section>
+
+              </section>
+            </div>
+          </div>
         </div>
       </div>
 

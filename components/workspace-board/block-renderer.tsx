@@ -23,9 +23,19 @@ type BlockRendererProps = {
 };
 
 const INPUT_CLASS =
-  "h-9 w-full rounded-[9px] border border-[rgba(48,51,58,0.18)] bg-white px-2.5 text-[13px] text-[#414752] outline-none focus-visible:ring-2 focus-visible:ring-[#5f6a7a]/40";
+  "h-10 w-full rounded-[12px] border border-[color:var(--board-border)] bg-[rgba(255,255,255,0.88)] px-3 text-[13px] text-[color:var(--board-text-strong)] outline-none transition-[border-color,box-shadow,background-color] duration-[var(--board-motion-fast)] ease-[var(--board-ease-standard)] placeholder:text-[color:var(--board-text-soft)] focus-visible:border-[color:var(--board-border-accent)] focus-visible:ring-2 focus-visible:ring-[color:var(--board-focus-ring)]";
 const TEXTAREA_CLASS =
-  "w-full resize-none rounded-[9px] border border-[rgba(48,51,58,0.18)] bg-white px-2.5 py-2 text-[13px] leading-5 text-[#414752] outline-none focus-visible:ring-2 focus-visible:ring-[#5f6a7a]/40";
+  "w-full resize-none rounded-[12px] border border-[color:var(--board-border)] bg-[rgba(255,255,255,0.88)] px-3 py-2.5 text-[13px] leading-6 text-[color:var(--board-text-strong)] outline-none transition-[border-color,box-shadow,background-color] duration-[var(--board-motion-fast)] ease-[var(--board-ease-standard)] placeholder:text-[color:var(--board-text-soft)] focus-visible:border-[color:var(--board-border-accent)] focus-visible:ring-2 focus-visible:ring-[color:var(--board-focus-ring)]";
+const ACTION_BUTTON_CLASS =
+  "inline-flex h-[var(--board-action-chip-height)] items-center justify-center rounded-full border border-[color:var(--board-border)] bg-[rgba(255,255,255,0.9)] px-[var(--board-action-chip-px)] text-[10px] font-semibold uppercase leading-none tracking-[var(--board-action-chip-track)] text-[color:var(--board-text-muted)] shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] transition-[border-color,background-color,box-shadow,color] duration-[var(--board-motion-fast)] ease-[var(--board-ease-standard)] hover:border-[color:var(--board-border-strong)] hover:bg-[rgba(255,255,255,0.98)] hover:text-[color:var(--board-text-strong)] active:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--board-focus-ring)]";
+const TODO_ROW_CLASS =
+  "flex items-center gap-3 rounded-[16px] border border-[color:var(--board-border)] bg-[rgba(255,255,255,0.72)] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.74)] transition-[border-color,background-color,box-shadow] duration-[var(--board-motion-fast)] ease-[var(--board-ease-standard)] focus-within:border-[color:var(--board-border-accent)] focus-within:bg-white focus-within:shadow-[0_10px_18px_rgba(76,84,101,0.08)]";
+const TODO_INPUT_CLASS =
+  "min-h-[42px] w-full border-0 bg-transparent px-0 text-[15px] leading-6 text-[color:var(--board-text-strong)] outline-none transition-colors duration-[var(--board-motion-fast)] ease-[var(--board-ease-standard)] placeholder:text-[color:var(--board-text-soft)]";
+const TODO_CHECKBOX_CLASS =
+  "mt-0 h-[22px] w-[22px] shrink-0 rounded-[7px] border-[color:var(--board-border-strong)] bg-white/90 text-[color:var(--board-accent-strong)] shadow-[inset_0_1px_0_rgba(255,255,255,0.76)] accent-[var(--board-accent-strong)] focus-visible:ring-2 focus-visible:ring-[color:var(--board-focus-ring)]";
+const TODO_ADD_BUTTON_CLASS =
+  "inline-flex min-h-[var(--board-action-chip-height-roomy)] items-center justify-center self-start rounded-full border border-[color:var(--board-border)] bg-[rgba(255,255,255,0.92)] px-[var(--board-action-chip-px-wide)] text-[10px] font-semibold uppercase leading-none tracking-[var(--board-action-chip-track)] text-[color:var(--board-accent-strong)] shadow-[inset_0_1px_0_rgba(255,255,255,0.74)] transition-[border-color,background-color,box-shadow,color] duration-[var(--board-motion-fast)] ease-[var(--board-ease-standard)] hover:border-[color:var(--board-border-accent)] hover:bg-white hover:text-[color:var(--board-text-strong)] hover:shadow-[0_10px_18px_rgba(76,84,101,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--board-focus-ring)]";
 
 function autoResize(event: FormEvent<HTMLTextAreaElement>) {
   const element = event.currentTarget;
@@ -73,7 +83,7 @@ export function BlockRenderer({ block, onChange }: BlockRendererProps) {
         value={data.text}
         onChange={(event) => onChange({ ...block, data: { ...data, text: event.target.value } })}
         placeholder="Untitled"
-        className="w-full bg-transparent text-[22px] font-semibold leading-tight tracking-[0.02em] text-[#3f4450] outline-none"
+        className="w-full rounded-[12px] bg-transparent px-1 py-1 text-[22px] font-semibold leading-tight tracking-[0.02em] text-[color:var(--board-text-strong)] outline-none transition-[background-color,box-shadow,color] duration-[var(--board-motion-fast)] ease-[var(--board-ease-standard)] placeholder:text-[color:var(--board-text-soft)] focus-visible:bg-[rgba(255,255,255,0.72)] focus-visible:ring-2 focus-visible:ring-[color:var(--board-focus-ring)]"
       />
     );
   }
@@ -85,7 +95,7 @@ export function BlockRenderer({ block, onChange }: BlockRendererProps) {
         value={data.text}
         onChange={(event) => onChange({ ...block, data: { ...data, text: event.target.value } })}
         placeholder="Heading"
-        className="w-full bg-transparent text-[18px] font-semibold leading-tight tracking-[0.02em] text-[#444a56] outline-none"
+        className="w-full rounded-[12px] bg-transparent px-1 py-1 text-[18px] font-semibold leading-tight tracking-[0.02em] text-[color:var(--board-text)] outline-none transition-[background-color,box-shadow,color] duration-[var(--board-motion-fast)] ease-[var(--board-ease-standard)] placeholder:text-[color:var(--board-text-soft)] focus-visible:bg-[rgba(255,255,255,0.72)] focus-visible:ring-2 focus-visible:ring-[color:var(--board-focus-ring)]"
       />
     );
   }
@@ -99,53 +109,68 @@ export function BlockRenderer({ block, onChange }: BlockRendererProps) {
         onInput={autoResize}
         onChange={(event) => onChange({ ...block, data: { ...data, text: event.target.value } })}
         placeholder="Write note..."
-        className={`${TEXTAREA_CLASS} min-h-[88px]`}
+        className={`${TEXTAREA_CLASS} min-h-[104px]`}
       />
     );
   }
 
   if (block.type === "todo") {
     const data = block.data as TodoBlockData;
+    const completedCount = data.items.filter((item) => item.checked).length;
     return (
-      <div className="space-y-2">
-        {data.items.map((item) => (
-          <div key={item.id} className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={item.checked}
-              onChange={(event) =>
-                onChange({
-                  ...block,
-                  data: {
-                    ...data,
-                    items: data.items.map((todoItem) =>
-                      todoItem.id === item.id ? { ...todoItem, checked: event.target.checked } : todoItem,
-                    ),
-                  },
-                })
-              }
-              className="h-4 w-4 rounded border-[rgba(59,62,70,0.5)]"
-            />
-            <input
-              value={item.text}
-              onChange={(event) =>
-                onChange({
-                  ...block,
-                  data: {
-                    ...data,
-                    items: data.items.map((todoItem) =>
-                      todoItem.id === item.id ? { ...todoItem, text: event.target.value } : todoItem,
-                    ),
-                  },
-                })
-              }
-              placeholder="To-do item"
-              className={`${INPUT_CLASS} ${
-                item.checked ? "text-[#8c9098] line-through" : ""
-              }`}
-            />
-          </div>
-        ))}
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex h-[var(--board-status-pill-height)] items-center rounded-full border border-[color:var(--board-border)] bg-[rgba(255,255,255,0.66)] px-[var(--board-status-pill-px)] text-[9px] font-semibold uppercase leading-none tracking-[var(--board-status-pill-track)] text-[color:var(--board-text-soft)]">
+            Checklist
+          </span>
+          <span className="inline-flex h-[var(--board-status-pill-height)] items-center rounded-full border border-[color:var(--board-border)] bg-[var(--board-warm-soft)] px-[var(--board-status-pill-px)] text-[9px] font-medium uppercase leading-none tracking-[var(--board-status-pill-track)] text-[color:var(--board-warm)]">
+            {completedCount}/{data.items.length} done
+          </span>
+        </div>
+
+        <div className="space-y-2.5 rounded-[18px] border border-[color:var(--board-border)] bg-[rgba(255,255,255,0.4)] p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
+          {data.items.map((item, index) => (
+            <label key={item.id} className={TODO_ROW_CLASS}>
+              <input
+                type="checkbox"
+                checked={item.checked}
+                aria-label={`Toggle to-do item ${index + 1}`}
+                onChange={(event) =>
+                  onChange({
+                    ...block,
+                    data: {
+                      ...data,
+                      items: data.items.map((todoItem) =>
+                        todoItem.id === item.id ? { ...todoItem, checked: event.target.checked } : todoItem,
+                      ),
+                    },
+                  })
+                }
+                className={TODO_CHECKBOX_CLASS}
+              />
+              <span className="min-w-0 flex-1">
+                <input
+                  value={item.text}
+                  aria-label={`To-do item ${index + 1}`}
+                  onChange={(event) =>
+                    onChange({
+                      ...block,
+                      data: {
+                        ...data,
+                        items: data.items.map((todoItem) =>
+                          todoItem.id === item.id ? { ...todoItem, text: event.target.value } : todoItem,
+                        ),
+                      },
+                    })
+                  }
+                  placeholder={`To-do item ${index + 1}`}
+                  className={`${TODO_INPUT_CLASS} ${item.checked ? "text-[color:var(--board-text-soft)] line-through" : ""}`}
+                />
+              </span>
+            </label>
+          ))}
+        </div>
+
         <button
           type="button"
           onClick={() =>
@@ -157,9 +182,9 @@ export function BlockRenderer({ block, onChange }: BlockRendererProps) {
               },
             })
           }
-          className="rounded-[8px] border border-[rgba(55,58,66,0.2)] bg-white px-2.5 py-1 text-[11px] font-medium tracking-[0.04em] text-[#4c5260] transition-colors hover:bg-[rgba(246,247,249,0.95)]"
+          className={TODO_ADD_BUTTON_CLASS}
         >
-          Add To-do Item
+          + Add item
         </button>
       </div>
     );
@@ -171,7 +196,7 @@ export function BlockRenderer({ block, onChange }: BlockRendererProps) {
     const validUrl = isValidHttpUrl(url);
 
     return (
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         <input
           value={data.label}
           onChange={(event) => onChange({ ...block, data: { ...data, label: event.target.value } })}
@@ -182,9 +207,7 @@ export function BlockRenderer({ block, onChange }: BlockRendererProps) {
           value={data.url}
           onChange={(event) => onChange({ ...block, data: { ...data, url: event.target.value } })}
           placeholder="https://..."
-          className={`${INPUT_CLASS} ${
-            !validUrl ? "border-[#d49f9f] text-[#8f4d4d]" : ""
-          }`}
+          className={`${INPUT_CLASS} ${!validUrl ? "border-[color:var(--board-danger)] text-[color:var(--board-danger)]" : ""}`}
         />
 
         {url && validUrl ? (
@@ -192,7 +215,7 @@ export function BlockRenderer({ block, onChange }: BlockRendererProps) {
             href={url}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center text-[12px] tracking-[0.03em] text-[#355f8e] underline decoration-[#355f8e]/50 underline-offset-2"
+            className="inline-flex items-center text-[12px] font-medium tracking-[0.03em] text-[color:var(--board-accent-strong)] underline decoration-[color:var(--board-accent)] underline-offset-2"
           >
             Open link
           </a>
@@ -210,7 +233,7 @@ export function BlockRenderer({ block, onChange }: BlockRendererProps) {
         onInput={autoResize}
         onChange={(event) => onChange({ ...block, data: { ...data, text: event.target.value } })}
         placeholder="Leave a comment..."
-        className={`${TEXTAREA_CLASS} min-h-[72px] bg-[rgba(251,252,253,0.95)] text-[12px]`}
+        className={`${TEXTAREA_CLASS} min-h-[84px] bg-[rgba(251,252,253,0.95)] text-[12px]`}
       />
     );
   }
@@ -218,8 +241,8 @@ export function BlockRenderer({ block, onChange }: BlockRendererProps) {
   if (block.type === "upload") {
     const data = block.data as UploadBlockData;
     return (
-      <div className="space-y-2">
-        <label className="inline-flex cursor-pointer items-center rounded-[9px] border border-[rgba(55,58,66,0.2)] bg-white px-3 py-1.5 text-[12px] font-medium tracking-[0.04em] text-[#505560] transition-colors hover:bg-[rgba(246,247,249,0.95)]">
+      <div className="space-y-2.5">
+        <label className={`${ACTION_BUTTON_CLASS} cursor-pointer`}>
           Choose File
           <input
             type="file"
@@ -232,15 +255,16 @@ export function BlockRenderer({ block, onChange }: BlockRendererProps) {
         </label>
 
         {data.fileName ? (
-          <div className="rounded-[9px] border border-[rgba(55,58,66,0.18)] bg-[rgba(250,250,251,0.95)] px-2.5 py-2 text-[12px] text-[#4a505b]">
+          <div className="rounded-[12px] border border-[color:var(--board-border)] bg-[rgba(255,255,255,0.82)] px-3 py-3 text-[12px] text-[color:var(--board-text)]">
             <p className="truncate font-medium">{data.fileName}</p>
-            <p className="mt-1 text-[11px] text-[#646b78]">
-              {data.fileType || "File"}{data.fileSize ? ` · ${data.fileSize}` : ""}
+            <p className="mt-1 text-[11px] text-[color:var(--board-text-soft)]">
+              {data.fileType || "File"}
+              {data.fileSize ? ` · ${data.fileSize}` : ""}
             </p>
           </div>
         ) : (
-          <div className="rounded-[9px] border border-dashed border-[rgba(55,58,66,0.24)] bg-[rgba(250,250,251,0.7)] px-2.5 py-3 text-[12px] text-[#666b76]">
-            Upload placeholder. Select a file to preview metadata.
+          <div className="rounded-[12px] border border-dashed border-[color:var(--board-border-strong)] bg-[rgba(255,255,255,0.64)] px-3 py-4 text-[12px] leading-6 text-[color:var(--board-text-muted)]">
+            Select a file to preview the item name and metadata.
           </div>
         )}
       </div>
@@ -252,7 +276,7 @@ export function BlockRenderer({ block, onChange }: BlockRendererProps) {
     const validHex = /^#[0-9A-Fa-f]{6}$/.test(data.value) ? data.value : "#6B7280";
 
     return (
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         <input
           value={data.label}
           onChange={(event) => onChange({ ...block, data: { ...data, label: event.target.value } })}
@@ -264,7 +288,7 @@ export function BlockRenderer({ block, onChange }: BlockRendererProps) {
             type="color"
             value={validHex}
             onChange={(event) => onChange({ ...block, data: { ...data, value: event.target.value } })}
-            className="h-9 w-11 rounded-[9px] border border-[rgba(55,58,66,0.2)] bg-white p-1"
+            className="h-10 w-12 rounded-[12px] border border-[color:var(--board-border)] bg-[rgba(255,255,255,0.92)] p-1 outline-none transition-[border-color,box-shadow] duration-[var(--board-motion-fast)] ease-[var(--board-ease-standard)] focus-visible:ring-2 focus-visible:ring-[color:var(--board-focus-ring)]"
           />
           <input
             value={data.value}
@@ -274,7 +298,7 @@ export function BlockRenderer({ block, onChange }: BlockRendererProps) {
           />
         </div>
         <div
-          className="h-10 w-full rounded-[9px] border border-[rgba(55,58,66,0.18)]"
+          className="h-12 w-full rounded-[12px] border border-[color:var(--board-border)]"
           style={{ backgroundColor: validHex }}
         />
       </div>
@@ -284,16 +308,16 @@ export function BlockRenderer({ block, onChange }: BlockRendererProps) {
   if (block.type === "map") {
     const data = block.data as MapBlockData;
     return (
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         <input
           value={data.location}
           onChange={(event) => onChange({ ...block, data: { ...data, location: event.target.value } })}
           placeholder="Search location"
           className={INPUT_CLASS}
         />
-        <div className="rounded-[9px] border border-[rgba(55,58,66,0.18)] bg-[linear-gradient(180deg,#f8f9fa_0%,#eef1f4_100%)] px-3 py-3 text-[12px] text-[#5a6070]">
-          <p className="font-medium tracking-[0.03em]">Map preview</p>
-          <p className="mt-1 text-[11px] text-[#687085]">
+        <div className="rounded-[12px] border border-[color:var(--board-border)] bg-[linear-gradient(180deg,rgba(248,249,250,0.98)_0%,rgba(238,241,244,0.96)_100%)] px-3 py-3 text-[12px] text-[color:var(--board-text)]">
+          <p className="font-semibold tracking-[0.03em] text-[color:var(--board-text-strong)]">Map preview</p>
+          <p className="mt-1 text-[11px] leading-5 text-[color:var(--board-text-soft)]">
             {data.location.trim() || "Enter a location to preview the map block."}
           </p>
         </div>
@@ -304,8 +328,8 @@ export function BlockRenderer({ block, onChange }: BlockRendererProps) {
   if (block.type === "table") {
     const data = normalizeTable(block.data as TableBlockData);
     return (
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
+      <div className="space-y-2.5">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() =>
@@ -317,7 +341,7 @@ export function BlockRenderer({ block, onChange }: BlockRendererProps) {
                 },
               })
             }
-            className="rounded-[8px] border border-[rgba(55,58,66,0.2)] bg-white px-2.5 py-1 text-[11px] font-medium tracking-[0.04em] text-[#4c5260] transition-colors hover:bg-[rgba(246,247,249,0.95)]"
+            className={ACTION_BUTTON_CLASS}
           >
             Add Row
           </button>
@@ -332,20 +356,20 @@ export function BlockRenderer({ block, onChange }: BlockRendererProps) {
                 },
               })
             }
-            className="rounded-[8px] border border-[rgba(55,58,66,0.2)] bg-white px-2.5 py-1 text-[11px] font-medium tracking-[0.04em] text-[#4c5260] transition-colors hover:bg-[rgba(246,247,249,0.95)]"
+            className={ACTION_BUTTON_CLASS}
           >
             Add Column
           </button>
         </div>
 
-        <div className="overflow-x-auto rounded-[9px] border border-[rgba(55,58,66,0.2)] bg-white">
-          <table className="w-full min-w-[260px] border-collapse">
+        <div className="overflow-x-auto rounded-[12px] border border-[color:var(--board-border)] bg-[rgba(255,255,255,0.92)]">
+          <table className="w-full min-w-[280px] border-collapse">
             <thead>
-              <tr className="border-b border-[rgba(55,58,66,0.14)]">
+              <tr className="border-b border-[color:var(--board-border)]">
                 {data.headers.map((header, headerIndex) => (
                   <th
                     key={`header-${headerIndex}`}
-                    className="border-r border-[rgba(55,58,66,0.12)] bg-[rgba(248,249,251,0.9)] p-0 text-left last:border-r-0"
+                    className="border-r border-[color:var(--board-border)] bg-[rgba(248,249,251,0.9)] p-0 text-left last:border-r-0"
                   >
                     <input
                       value={header}
@@ -360,7 +384,7 @@ export function BlockRenderer({ block, onChange }: BlockRendererProps) {
                           },
                         })
                       }
-                      className="h-9 w-full border-0 bg-transparent px-2 text-[11px] font-semibold tracking-[0.04em] text-[#48505d] outline-none"
+                      className="h-10 w-full border-0 bg-transparent px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--board-text-muted)] outline-none transition-[background-color] duration-[var(--board-motion-fast)] ease-[var(--board-ease-standard)] focus-visible:bg-white"
                     />
                   </th>
                 ))}
@@ -368,11 +392,11 @@ export function BlockRenderer({ block, onChange }: BlockRendererProps) {
             </thead>
             <tbody>
               {data.rows.map((row, rowIndex) => (
-                <tr key={`row-${rowIndex}`} className="border-b border-[rgba(55,58,66,0.12)] last:border-b-0">
+                <tr key={`row-${rowIndex}`} className="border-b border-[color:var(--board-border)] last:border-b-0">
                   {row.map((cell, columnIndex) => (
                     <td
                       key={`cell-${rowIndex}-${columnIndex}`}
-                      className="border-r border-[rgba(55,58,66,0.12)] last:border-r-0"
+                      className="border-r border-[color:var(--board-border)] last:border-r-0"
                     >
                       <input
                         value={cell}
@@ -392,7 +416,7 @@ export function BlockRenderer({ block, onChange }: BlockRendererProps) {
                           })
                         }
                         placeholder="Cell"
-                        className="h-9 w-full min-w-[100px] border-0 px-2 text-[12px] text-[#444a57] outline-none"
+                        className="h-10 w-full min-w-[110px] border-0 bg-transparent px-3 text-[12px] text-[color:var(--board-text)] outline-none transition-[background-color] duration-[var(--board-motion-fast)] ease-[var(--board-ease-standard)] placeholder:text-[color:var(--board-text-soft)] focus-visible:bg-white"
                       />
                     </td>
                   ))}
@@ -405,5 +429,5 @@ export function BlockRenderer({ block, onChange }: BlockRendererProps) {
     );
   }
 
-  return <div className="h-px w-full bg-[rgba(72,78,88,0.25)]" />;
+  return <div className="h-px w-full bg-[color:var(--board-border-strong)]" />;
 }
