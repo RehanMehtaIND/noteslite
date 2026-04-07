@@ -75,3 +75,79 @@ export type CardLocation = {
   columnId: string;
   cardId: string;
 };
+
+export type CanvasViewMode = "board" | "canvas";
+export type CanvasUiMode = "expanded" | "minimized";
+
+export type CanvasCamera = {
+  x: number;
+  y: number;
+};
+
+export type CanvasItemType = "note" | "image" | "board-card" | "column-shell";
+
+export type CanvasItemSource =
+  | {
+      kind: "card";
+      id: string;
+    }
+  | {
+      kind: "column";
+      id: string;
+    };
+
+type CanvasItemBase = {
+  id: string;
+  type: CanvasItemType;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  zIndex: number;
+  source?: CanvasItemSource;
+};
+
+export type CanvasNoteItem = CanvasItemBase & {
+  type: "note";
+  title: string;
+  content: string;
+  label: string;
+};
+
+export type CanvasImageItem = CanvasItemBase & {
+  type: "image";
+  title: string;
+  imageUrl: string;
+  caption: string;
+  label: string;
+};
+
+export type CanvasBoardCardItem = CanvasItemBase & {
+  type: "board-card";
+  title: string;
+  content: string;
+  label: string;
+};
+
+export type CanvasColumnShellItem = CanvasItemBase & {
+  type: "column-shell";
+  title: string;
+  content: string;
+  label: string;
+};
+
+export type CanvasItem =
+  | CanvasNoteItem
+  | CanvasImageItem
+  | CanvasBoardCardItem
+  | CanvasColumnShellItem;
+
+export type CanvasPoint = {
+  x: number;
+  y: number;
+};
+
+export type CanvasBounds = {
+  width: number;
+  height: number;
+};

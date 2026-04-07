@@ -1,27 +1,41 @@
 "use client";
 
-import { useCallback, useMemo, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import { BoardSidebar } from "@/components/workspace-board/board-sidebar";
 import { BoardCard } from "@/components/workspace-board/board-card";
+import { CanvasView } from "@/components/workspace-board/canvas-view";
 import { WorkspaceHeader } from "@/components/workspace-board/workspace-header";
-import type { BlockType, BoardState, PaletteItem } from "@/components/workspace-board/types";
+import type {
+  BlockType,
+  BoardState,
+  CanvasCamera,
+  CanvasItem,
+  CanvasPoint,
+  CanvasUiMode,
+  CanvasViewMode,
+  PaletteItem,
+} from "@/components/workspace-board/types";
 import {
+  DEFAULT_CANVAS_CAMERA,
   addBlockToCard,
   clamp,
   countCards,
   createBlock,
   createCard,
+  createCanvasItemFromPalette,
   createColumn,
   createSeedBoard,
   deleteBlock,
   deleteCard,
   duplicateBlock,
   duplicateCard,
+  getCanvasSourceKey,
   moveBlock,
   moveCard,
   renameColumn,
+  syncCanvasItemsWithBoard,
   toggleCardCollapsed,
   updateBlock,
   withUpdatedColumns,
@@ -56,18 +70,33 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
   const router = useRouter();
 
   const [board, setBoard] = useState(() => createSeedBoard(workspaceId || "local-workspace"));
+  const [viewMode, setViewMode] = useState<CanvasViewMode>("board");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("New Workspace");
   const [selectedColumnId, setSelectedColumnId] = useState<string | null>(null);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [selectedCanvasItemId, setSelectedCanvasItemId] = useState<string | null>(null);
   const [editingColumnId, setEditingColumnId] = useState<string | null>(null);
   const [columnTitleDraft, setColumnTitleDraft] = useState("");
   const [draggingPaletteItem, setDraggingPaletteItem] = useState<PaletteItem | null>(null);
   const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
   const [activeDropKey, setActiveDropKey] = useState<string | null>(null);
+  const [canvasItems, setCanvasItems] = useState<CanvasItem[]>([]);
+  const [canvasCamera, setCanvasCamera] = useState<CanvasCamera>(DEFAULT_CANVAS_CAMERA);
+  const [canvasUiMode, setCanvasUiMode] = useState<CanvasUiMode>("expanded");
+  const [dismissedCanvasSourceKeys, setDismissedCanvasSourceKeys] = useState<string[]>([]);
+  const [lastCanvasPoint, setLastCanvasPoint] = useState<CanvasPoint>({
+    x: 320,
+    y: 220,
+  });
+  const canvasItemsRef = useRef<CanvasItem[]>(canvasItems);
 
   const updateBoard = useCallback((updater: (current: BoardState) => BoardState) => {
     setBoard((current) => updater(current));
+  }, []);
+
+  const updateCanvasItems = useCallback((updater: (current: CanvasItem[]) => CanvasItem[]) => {
+    setCanvasItems((current) => updater(current));
   }, []);
 
   const resolvedSelectedColumnId = useMemo(() => {
@@ -89,6 +118,48 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
   }, [board.columns]);
 
   const cardsCount = useMemo(() => countCards(board), [board]);
+
+  useEffect(() => {
+    setCanvasItems((current) => syncCanvasItemsWithBoard(board, current, dismissedCanvasSourceKeys));
+  }, [board, dismissedCanvasSourceKeys]);
+
+  useEffect(() => {
+    canvasItemsRef.current = canvasItems;
+  }, [canvasItems]);
+
+  useEffect(() => {
+    if (selectedCanvasItemId && !canvasItems.some((item) => item.id === selectedCanvasItemId)) {
+      setSelectedCanvasItemId(null);
+    }
+  }, [canvasItems, selectedCanvasItemId]);
+
+  const addCanvasItem = useCallback(
+    (item: PaletteItem, point?: CanvasPoint) => {
+      const spawnPoint = point ?? lastCanvasPoint;
+      const nextItem = createCanvasItemFromPalette(item, spawnPoint, canvasItemsRef.current);
+      const nextItems = [...canvasItemsRef.current, nextItem];
+      canvasItemsRef.current = nextItems;
+      setCanvasItems(nextItems);
+      setSelectedCanvasItemId(nextItem.id);
+    },
+    [lastCanvasPoint],
+  );
+
+  const deleteCanvasItem = useCallback((itemId: string) => {
+    const itemToRemove = canvasItemsRef.current.find((item) => item.id === itemId);
+    const removedSourceKey = getCanvasSourceKey(itemToRemove?.source);
+    const nextItems = canvasItemsRef.current.filter((item) => item.id !== itemId);
+    canvasItemsRef.current = nextItems;
+    setCanvasItems(nextItems);
+
+    if (removedSourceKey) {
+      setDismissedCanvasSourceKeys((current) =>
+        current.includes(removedSourceKey) ? current : [...current, removedSourceKey],
+      );
+    }
+
+    setSelectedCanvasItemId((current) => (current === itemId ? null : current));
+  }, []);
 
   const insertCardAt = useCallback(
     (columnId: string, insertIndex: number, initialBlockType: BlockType = "note") => {
@@ -158,6 +229,11 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
 
   const onPaletteItemClick = useCallback(
     (item: PaletteItem) => {
+      if (viewMode === "canvas") {
+        addCanvasItem(item);
+        return;
+      }
+
       if (item === "column") {
         addNewColumn();
         return;
@@ -177,7 +253,15 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
         addBlockFromSidebar(item);
       }
     },
-    [addBlockFromSidebar, addCardToColumn, addNewColumn, board.columns, resolvedSelectedColumnId],
+    [
+      addBlockFromSidebar,
+      addCanvasItem,
+      addCardToColumn,
+      addNewColumn,
+      board.columns,
+      resolvedSelectedColumnId,
+      viewMode,
+    ],
   );
 
   const onPaletteDragStart = useCallback((event: DragEvent<HTMLButtonElement>, item: PaletteItem) => {
@@ -278,7 +362,7 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
   const showDropGuides = draggingCardId !== null || draggingPaletteItem !== null;
 
   return (
-    <div className="min-h-screen overflow-x-auto bg-[linear-gradient(180deg,#ebe6de_0%,#e3cdc0_100%)] p-4 text-[#3d4047]">
+    <div className="workspace-board-theme relative min-h-screen overflow-x-auto bg-[var(--board-canvas)] p-4 text-[#3d4047]">
       <div className="mx-auto w-[min(1880px,100%)] rounded-[22px] border border-[rgba(255,255,255,0.85)] bg-[rgba(244,244,246,0.95)] p-3 [box-shadow:0_16px_28px_rgba(73,59,49,0.26)]">
         <div className="grid gap-4 xl:grid-cols-[minmax(232px,248px)_1fr]">
           <BoardSidebar
@@ -302,33 +386,34 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
               onCommitTitle={commitWorkspaceTitle}
             />
 
-            <div className="overflow-x-auto pb-2">
-              <div className="flex min-w-max items-start gap-3">
-                {board.columns.map((column) => {
-                  const isColumnSelected = resolvedSelectedColumnId === column.id;
-                  const isEditingColumn = editingColumnId === column.id;
+            {viewMode === "board" ? (
+              <div className="overflow-x-auto pb-2">
+                <div className="flex min-w-max items-start gap-3">
+                  {board.columns.map((column) => {
+                    const isColumnSelected = resolvedSelectedColumnId === column.id;
+                    const isEditingColumn = editingColumnId === column.id;
 
-                  return (
-                    <article
-                      key={column.id}
-                      tabIndex={0}
-                      onClick={() => {
-                        setSelectedColumnId(column.id);
-                        setSelectedCardId(null);
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
+                    return (
+                      <article
+                        key={column.id}
+                        tabIndex={0}
+                        onClick={() => {
                           setSelectedColumnId(column.id);
                           setSelectedCardId(null);
-                        }
-                      }}
-                      className={`min-h-[620px] w-[320px] rounded-[14px] border p-[10px] transition-colors focus-visible:outline-none ${
-                        isColumnSelected
-                          ? "border-[#4e5460] bg-[rgba(238,238,240,0.9)] ring-1 ring-[#6a7182]/25"
-                          : "border-[rgba(0,0,0,0.2)] bg-[rgba(238,238,240,0.8)]"
-                      }`}
-                    >
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            setSelectedColumnId(column.id);
+                            setSelectedCardId(null);
+                          }
+                        }}
+                        className={`min-h-[620px] w-[320px] rounded-[14px] border p-[10px] transition-colors focus-visible:outline-none ${
+                          isColumnSelected
+                            ? "border-[#4e5460] bg-[rgba(238,238,240,0.9)] ring-1 ring-[#6a7182]/25"
+                            : "border-[rgba(0,0,0,0.2)] bg-[rgba(238,238,240,0.8)]"
+                        }`}
+                      >
                       <div
                         onDoubleClick={(event) => {
                           event.stopPropagation();
@@ -464,14 +549,68 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
                       >
                         + New Card
                       </button>
-                    </article>
-                  );
-                })}
+                      </article>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="min-h-[720px]">
+                <CanvasView
+                  items={canvasItems}
+                  camera={canvasCamera}
+                  uiMode={canvasUiMode}
+                  selectedItemId={selectedCanvasItemId}
+                  draggingPaletteItem={draggingPaletteItem}
+                  onSelectItem={setSelectedCanvasItemId}
+                  onItemsChange={updateCanvasItems}
+                  onCreateItem={addCanvasItem}
+                  onDeleteItem={deleteCanvasItem}
+                  onCanvasPointChange={setLastCanvasPoint}
+                  onCameraChange={setCanvasCamera}
+                  onCanvasUiModeChange={setCanvasUiMode}
+                />
+              </div>
+            )}
           </section>
         </div>
       </div>
+
+      <button
+        type="button"
+        aria-label={viewMode === "board" ? "Switch to canvas view" : "Switch to board view"}
+        onClick={() => setViewMode((current) => (current === "board" ? "canvas" : "board"))}
+        className="fixed bottom-5 right-5 z-20 inline-flex h-[78px] w-[78px] flex-col items-center justify-center rounded-full border border-[color:var(--board-border-accent)] bg-[rgba(255,255,255,0.92)] text-[color:var(--board-accent-strong)] shadow-[0_18px_34px_rgba(47,43,40,0.16)] transition-[transform,box-shadow,border-color,background-color,color] duration-[var(--board-motion-base)] ease-[var(--board-ease-standard)] hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_24px_42px_rgba(47,43,40,0.18)] active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--board-focus-ring)]"
+      >
+        <span
+          aria-hidden="true"
+          className={`mb-1 grid ${viewMode === "board" ? "grid-cols-2 gap-[3px]" : "grid-cols-3 gap-[2.5px]"}`}
+        >
+          {viewMode === "board" ? (
+            <>
+              <span className="h-[7px] w-[7px] rounded-[2px] bg-current" />
+              <span className="h-[7px] w-[7px] rounded-[2px] bg-current opacity-70" />
+              <span className="h-[7px] w-[7px] rounded-[2px] bg-current opacity-85" />
+              <span className="h-[7px] w-[7px] rounded-[2px] bg-current opacity-55" />
+            </>
+          ) : (
+            <>
+              <span className="h-[4px] w-[4px] rounded-full bg-current" />
+              <span className="h-[4px] w-[4px] rounded-full bg-current opacity-60" />
+              <span className="h-[4px] w-[4px] rounded-full bg-current opacity-85" />
+              <span className="h-[4px] w-[4px] rounded-full bg-current opacity-75" />
+              <span className="h-[4px] w-[4px] rounded-full bg-current opacity-95" />
+              <span className="h-[4px] w-[4px] rounded-full bg-current opacity-70" />
+            </>
+          )}
+        </span>
+        <span className="text-[9px] font-semibold uppercase tracking-[0.18em]">
+          {viewMode === "board" ? "Canvas" : "Board"}
+        </span>
+        <span className="mt-0.5 text-[8px] uppercase tracking-[0.16em] text-[color:var(--board-text-soft)]">
+          View
+        </span>
+      </button>
     </div>
   );
 }
