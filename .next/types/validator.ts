@@ -74,6 +74,15 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../app/dashboard/[workspaceId]/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/dashboard/[workspaceId]">> = Specific
+  const handler = {} as typeof import("../../app/dashboard/[workspaceId]/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../app/dashboard/page.tsx
 {
   type __IsExpected<Specific extends AppPageConfig<"/dashboard">> = Specific
@@ -105,6 +114,60 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
 {
   type __IsExpected<Specific extends RouteHandlerConfig<"/api/db-check">> = Specific
   const handler = {} as typeof import("../../app/api/db-check/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../app/api/workspaces/[id]/cards/[cardId]/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/workspaces/[id]/cards/[cardId]">> = Specific
+  const handler = {} as typeof import("../../app/api/workspaces/[id]/cards/[cardId]/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../app/api/workspaces/[id]/cards/move/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/workspaces/[id]/cards/move">> = Specific
+  const handler = {} as typeof import("../../app/api/workspaces/[id]/cards/move/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../app/api/workspaces/[id]/cards/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/workspaces/[id]/cards">> = Specific
+  const handler = {} as typeof import("../../app/api/workspaces/[id]/cards/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../app/api/workspaces/[id]/columns/[columnId]/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/workspaces/[id]/columns/[columnId]">> = Specific
+  const handler = {} as typeof import("../../app/api/workspaces/[id]/columns/[columnId]/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../app/api/workspaces/[id]/columns/reorder/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/workspaces/[id]/columns/reorder">> = Specific
+  const handler = {} as typeof import("../../app/api/workspaces/[id]/columns/reorder/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../app/api/workspaces/[id]/columns/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/workspaces/[id]/columns">> = Specific
+  const handler = {} as typeof import("../../app/api/workspaces/[id]/columns/route.js")
   type __Check = __IsExpected<typeof handler>
   // @ts-ignore
   type __Unused = __Check

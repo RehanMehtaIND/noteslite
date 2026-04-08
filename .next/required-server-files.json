@@ -64,7 +64,7 @@
       "unoptimized": false
     },
     "devIndicators": {
-      "position": "bottom-left"
+      "position": "bottom-right"
     },
     "onDemandEntries": {
       "maxInactiveAge": 60000,
@@ -99,7 +99,7 @@
         "transform": "lodash/{{member}}"
       }
     },
-    "outputFileTracingRoot": "/Users/rehanmehta/Documents/NOTESLITES/noteslite",
+    "outputFileTracingRoot": "/Users/rehanmehta/Movies/noteslite",
     "experimental": {
       "useSkewCookie": false,
       "cacheLife": {
@@ -289,10 +289,10 @@
     "bundlePagesRouterDependencies": false,
     "configFileName": "next.config.ts",
     "turbopack": {
-      "root": "/Users/rehanmehta/Documents/NOTESLITES/noteslite"
+      "root": "/Users/rehanmehta/Movies/noteslite"
     }
   },
-  "appDir": "/Users/rehanmehta/Documents/NOTESLITES/noteslite",
+  "appDir": "/Users/rehanmehta/Movies/noteslite",
   "relativeAppDir": "",
   "files": [
     ".next/routes-manifest.json",

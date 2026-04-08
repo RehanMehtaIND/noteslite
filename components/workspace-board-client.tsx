@@ -16,16 +16,15 @@ import { BLOCK_LABELS } from "@/components/workspace-board/constants";
 import type {
   BlockType,
   BoardState,
+  CanvasViewMode,
   PaletteItem,
 } from "@/components/workspace-board/types";
 import {
-  DEFAULT_CANVAS_CAMERA,
   addBlockToCard,
   clamp,
   countCards,
   createBlock,
   createCard,
-  createCanvasItemFromPalette,
   createColumn,
   createSeedBoard,
   deleteBlock,
@@ -36,7 +35,6 @@ import {
   moveColumn,
   reorderBlockInCard,
   renameColumn,
-  syncCanvasItemsWithBoard,
   toggleCardCollapsed,
   updateBlock,
   withUpdatedColumns,
@@ -178,7 +176,6 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
   const [titleDraft, setTitleDraft] = useState("New Workspace");
   const [selectedColumnId, setSelectedColumnId] = useState<string | null>(null);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
-  const [selectedCanvasItemId, setSelectedCanvasItemId] = useState<string | null>(null);
   const [editingColumnId, setEditingColumnId] = useState<string | null>(null);
   const [columnTitleDraft, setColumnTitleDraft] = useState("");
   const [draggingPaletteItem, setDraggingPaletteItem] = useState<PaletteItem | null>(null);
@@ -189,10 +186,6 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
 
   const updateBoard = useCallback((updater: (current: BoardState) => BoardState) => {
     setBoard((current) => updater(current));
-  }, []);
-
-  const updateCanvasItems = useCallback((updater: (current: CanvasItem[]) => CanvasItem[]) => {
-    setCanvasItems((current) => updater(current));
   }, []);
 
   const resolvedSelectedColumnId = useMemo(() => {
@@ -302,11 +295,6 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
 
   const onPaletteItemClick = useCallback(
     (item: PaletteItem) => {
-      if (viewMode === "canvas") {
-        addCanvasItem(item);
-        return;
-      }
-
       if (item === "column") {
         addNewColumn();
         return;

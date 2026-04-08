@@ -28,6 +28,56 @@
       "namedRegex": "^/api/workspaces/(?<nxtPid>[^/]+?)(?:/)?$"
     },
     {
+      "page": "/api/workspaces/[id]/cards",
+      "regex": "^/api/workspaces/([^/]+?)/cards(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/workspaces/(?<nxtPid>[^/]+?)/cards(?:/)?$"
+    },
+    {
+      "page": "/api/workspaces/[id]/cards/move",
+      "regex": "^/api/workspaces/([^/]+?)/cards/move(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/workspaces/(?<nxtPid>[^/]+?)/cards/move(?:/)?$"
+    },
+    {
+      "page": "/api/workspaces/[id]/cards/[cardId]",
+      "regex": "^/api/workspaces/([^/]+?)/cards/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid",
+        "nxtPcardId": "nxtPcardId"
+      },
+      "namedRegex": "^/api/workspaces/(?<nxtPid>[^/]+?)/cards/(?<nxtPcardId>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/workspaces/[id]/columns",
+      "regex": "^/api/workspaces/([^/]+?)/columns(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/workspaces/(?<nxtPid>[^/]+?)/columns(?:/)?$"
+    },
+    {
+      "page": "/api/workspaces/[id]/columns/reorder",
+      "regex": "^/api/workspaces/([^/]+?)/columns/reorder(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/workspaces/(?<nxtPid>[^/]+?)/columns/reorder(?:/)?$"
+    },
+    {
+      "page": "/api/workspaces/[id]/columns/[columnId]",
+      "regex": "^/api/workspaces/([^/]+?)/columns/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid",
+        "nxtPcolumnId": "nxtPcolumnId"
+      },
+      "namedRegex": "^/api/workspaces/(?<nxtPid>[^/]+?)/columns/(?<nxtPcolumnId>[^/]+?)(?:/)?$"
+    },
+    {
       "page": "/auth/sign-in/[[...sign-in]]",
       "regex": "^/auth/sign\\-in(?:/(.+?))?(?:/)?$",
       "routeKeys": {
@@ -42,6 +92,14 @@
         "nxtPsignup": "nxtPsign-up"
       },
       "namedRegex": "^/auth/sign\\-up(?:/(?<nxtPsignup>.+?))?(?:/)?$"
+    },
+    {
+      "page": "/dashboard/[workspaceId]",
+      "regex": "^/dashboard/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPworkspaceId": "nxtPworkspaceId"
+      },
+      "namedRegex": "^/dashboard/(?<nxtPworkspaceId>[^/]+?)(?:/)?$"
     }
   ],
   "staticRoutes": [
