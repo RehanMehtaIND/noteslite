@@ -6,14 +6,14 @@ NOTESLITE runs as a single Next.js app with:
 - React + TypeScript
 - Prisma ORM
 - PostgreSQL
-- Clerk authentication
+- NextAuth + Google OAuth
 
 ## Prerequisites
 
 - Node.js 20+
 - npm 10+
 - PostgreSQL running locally or remotely
-- Clerk project keys
+- Google OAuth credentials
 
 ## Installation
 
@@ -32,12 +32,11 @@ cp .env.example .env
 3. Fill `.env` with valid values:
 
 - `DATABASE_URL`
-- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
-- `CLERK_SECRET_KEY`
-- `NEXT_PUBLIC_CLERK_SIGN_IN_URL=/auth/sign-in`
-- `NEXT_PUBLIC_CLERK_SIGN_UP_URL=/auth/sign-up`
-- `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/dashboard`
-- `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/dashboard`
+- `DIRECT_URL` (required for migrations when using Supabase)
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `NEXTAUTH_URL`
+- `NEXTAUTH_SECRET`
 
 ## Database Setup
 
@@ -51,6 +50,12 @@ Generate Prisma Client (optional, usually auto-generated during migrate):
 
 ```bash
 npm run prisma:generate
+```
+
+Apply migrations in deployed environments (recommended for production):
+
+```bash
+npm run prisma:migrate:deploy
 ```
 
 Open Prisma Studio (optional):
@@ -76,8 +81,28 @@ Open http://localhost:3000.
 - `npm run start` - run production server
 - `npm run lint` - run ESLint
 - `npm run prisma:migrate` - apply dev migrations with Prisma
+- `npm run prisma:migrate:deploy` - apply committed migrations in production
 - `npm run prisma:generate` - generate Prisma client
 - `npm run prisma:studio` - open Prisma Studio
+
+## Supabase + Prisma Setup
+
+For Supabase, use two database URLs:
+
+- `DATABASE_URL`: pooled connection (port `6543`) for runtime queries
+- `DIRECT_URL`: direct connection (port `5432`) for Prisma migrations
+
+Example:
+
+```dotenv
+DATABASE_URL="postgresql://postgres.PROJECT_REF:YOUR_DB_PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1"
+DIRECT_URL="postgresql://postgres:YOUR_DB_PASSWORD@db.PROJECT_REF.supabase.co:5432/postgres?sslmode=require"
+```
+
+For Vercel, set install/build so Prisma stays in sync:
+
+- Install Command: `npm install && npx prisma generate`
+- Build Command: `npx prisma migrate deploy && next build`
 
 ## Project Structure
 
@@ -113,7 +138,7 @@ When submitting a PR, please use the following format for clear communication:
 
 ```
 Name:
-[Brief descriptive title of the PR]
+[Brief descriptive title of the PR] - [YOUR NAME]
 
 Work Done:
 [Concise summary of what was implemented or fixed, including any context about why the changes were needed]
@@ -139,7 +164,7 @@ Test/Verification:
 
 ```
 Name:
-NOTESLITE Cleanup - Remove Unused Canvas Leftovers
+NOTESLITE Cleanup - Remove Unused Canvas Leftovers - Rehan
 
 Work Done:
 Removed stale canvas-related code that was no longer used in the board client, including unused imports, unused state, and dead helper callbacks that were left behind after the canvas work was simplified.
