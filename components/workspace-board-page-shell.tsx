@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@clerk/nextjs";
+import { useSession } from "next-auth/react";
 
 import WorkspaceBoardClient from "@/components/workspace-board-client";
 
@@ -12,19 +12,19 @@ export default function WorkspaceBoardPageShell({
   workspaceId: string;
 }) {
   const router = useRouter();
-  const { isLoaded, userId } = useAuth();
+  const { data: session, status } = useSession();
 
   useEffect(() => {
-    if (!isLoaded) {
+    if (status === "loading") {
       return;
     }
 
-    if (!userId) {
-      router.replace("/auth");
+    if (!session) {
+      router.replace("/auth/sign-in");
     }
-  }, [isLoaded, router, userId]);
+  }, [router, session, status]);
 
-  if (!isLoaded || !userId) {
+  if (status === "loading" || !session) {
     return (
       <div className="workspace-board-theme min-h-screen bg-[var(--board-canvas)] px-6 py-10 text-[color:var(--board-text)]">
         <div className="mx-auto max-w-3xl rounded-[28px] border border-[color:var(--board-shell-border)] bg-[var(--board-shell-bg)] p-6 shadow-[var(--board-shadow-shell)] backdrop-blur-xl">

@@ -104,3 +104,60 @@ npm run prisma:migrate
 ## Legacy Folders
 
 `frontend/` and `backend/` are legacy reference folders from the older split architecture and are not used by the current runtime.
+
+## Pull Request Format
+
+When submitting a PR, please use the following format for clear communication:
+
+### Template
+
+```
+Name:
+[Brief descriptive title of the PR]
+
+Work Done:
+[Concise summary of what was implemented or fixed, including any context about why the changes were needed]
+
+Purpose:
+[Explain the goal and benefit of these changes — what problem does it solve or what improvement does it provide?]
+
+Changes Made:
+- [Bullet point for each significant change]
+- [Include both functional and refactoring changes]
+- [Mention any breaking changes if applicable]
+
+Files Changed:
+- [List the main files that were modified]
+
+Test/Verification:
+- [How to verify the changes work correctly]
+- [Any test commands or manual testing steps]
+- [Build and lint verification status]
+```
+
+### Example
+
+```
+Name:
+NOTESLITE Cleanup - Remove Unused Canvas Leftovers
+
+Work Done:
+Removed stale canvas-related code that was no longer used in the board client, including unused imports, unused state, and dead helper callbacks that were left behind after the canvas work was simplified.
+
+Purpose:
+This cleanup keeps the board client compiling cleanly, reduces noise in the component, and removes code paths that referenced undefined or unused canvas state.
+
+Changes Made:
+- Removed unused canvas imports from workspace-board-client.tsx
+- Removed unused canvas state and updater hooks that were not wired into the current UI
+- Removed the unused canvas branch from palette click handling
+- Kept the existing board workflow intact while trimming dead code from the component
+- Fixed the build error caused by the missing CanvasViewMode reference during the cleanup pass
+
+Files Changed:
+- workspace-board-client.tsx
+
+Test/Verification:
+- npm run build passed after the cleanup
+- Confirmed the repo compiles successfully with the unused canvas leftovers removed
+```

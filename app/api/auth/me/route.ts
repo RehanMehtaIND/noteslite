@@ -12,7 +12,7 @@ export async function GET() {
   return NextResponse.json({
     user: {
       id: user.id,
-      clerkId: user.clerkId,
+      googleId: user.googleId,
       name: user.name,
       email: user.email,
     },
