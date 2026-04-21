@@ -2,21 +2,17 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth, useUser } from "@clerk/nextjs";
+import { useSession } from "next-auth/react";
 import DashboardClient from "@/components/dashboard-client";
 
-function resolveUserName(user: ReturnType<typeof useUser>["user"]) {
-  const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim();
+function resolveUserName(user: { name?: string | null; email?: string | null } | undefined) {
+  const fullName = user?.name?.trim() ?? "";
 
   if (fullName) {
     return fullName;
   }
 
-  if (user?.username) {
-    return user.username;
-  }
-
-  const email = user?.primaryEmailAddress?.emailAddress;
+  const email = user?.email;
 
   if (email) {
     return email.split("@")[0] || "User";
@@ -27,20 +23,19 @@ function resolveUserName(user: ReturnType<typeof useUser>["user"]) {
 
 export default function DashboardPageShell() {
   const router = useRouter();
-  const { isLoaded, userId } = useAuth();
-  const { user } = useUser();
+  const { data: session, status } = useSession();
 
   useEffect(() => {
-    if (!isLoaded) {
+    if (status === "loading") {
       return;
     }
 
-    if (!userId) {
-      router.replace("/auth");
+    if (!session) {
+      router.replace("/auth/sign-in");
     }
-  }, [isLoaded, router, userId]);
+  }, [router, session, status]);
 
-  if (!isLoaded || !userId) {
+  if (status === "loading" || !session) {
     return (
       <div className="min-h-screen bg-[linear-gradient(180deg,#ebe6de_0%,#e3cdc0_100%)] px-6 py-10 text-[#64666b]">
         Loading dashboard...
@@ -48,5 +43,5 @@ export default function DashboardPageShell() {
     );
   }
 
-  return <DashboardClient userName={resolveUserName(user)} />;
+  return <DashboardClient userName={resolveUserName(session.user)} />;
 }

@@ -1,11 +1,11 @@
 "use client";
 
-import ClerkSignInPanel from "@/components/clerk-sign-in-panel";
+import GoogleAuthPanel from "@/components/google-auth-panel";
 
 export default function AuthPageShell({
   mode = "sign-in",
 }: {
   mode?: "sign-in" | "sign-up";
 }) {
-  return <ClerkSignInPanel mode={mode} />;
+  return <GoogleAuthPanel mode={mode} />;
 }

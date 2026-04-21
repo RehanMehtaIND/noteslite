@@ -9,7 +9,7 @@ import {
   type CSSProperties,
 } from "react";
 import { useRouter } from "next/navigation";
-import { useClerk, useUser } from "@clerk/nextjs";
+import { signOut, useSession } from "next-auth/react";
 import ProfileModal, {
   type PasswordForm,
   type ProfileSettings,
@@ -246,8 +246,7 @@ export default function DashboardClient({
   userName: string;
 }) {
   const router = useRouter();
-  const { user } = useUser();
-  const { signOut } = useClerk();
+  const { data: session } = useSession();
   const [scale, setScale] = useState(getDashboardScale);
   const [workspaces, setWorkspaces] = useState<WorkspaceItem[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -273,9 +272,10 @@ export default function DashboardClient({
   const profileCloseTimerRef = useRef<number | null>(null);
   const hasHydratedProfileRef = useRef(false);
   const profileInitials = useMemo(() => getProfileInitials(userName), [userName]);
-  const userEmail = user?.primaryEmailAddress?.emailAddress ?? "";
-  const userAvatarUrl = user?.imageUrl ?? "";
-  const isPrimaryEmailVerified = user?.primaryEmailAddress?.verification?.status === "verified";
+  const user = session?.user;
+  const userEmail = user?.email ?? "";
+  const userAvatarUrl = user?.image ?? "";
+  const isPrimaryEmailVerified = Boolean(user?.emailVerified);
   const defaultProfile = useMemo(
     () =>
       createDefaultProfileSettings({
@@ -585,9 +585,7 @@ export default function DashboardClient({
   };
 
   const logout = async () => {
-    await signOut();
-    router.push("/auth");
-    router.refresh();
+    await signOut({ callbackUrl: "/auth/sign-in" });
   };
 
   const openWorkspace = useCallback(

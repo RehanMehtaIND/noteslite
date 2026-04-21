@@ -1,19 +1,20 @@
 {
   "/_not-found/page": "app/_not-found/page.js",
+  "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
   "/api/auth/me/route": "app/api/auth/me/route.js",
   "/api/db-check/route": "app/api/db-check/route.js",
   "/api/workspaces/[id]/cards/[cardId]/route": "app/api/workspaces/[id]/cards/[cardId]/route.js",
+  "/api/workspaces/[id]/cards/move/route": "app/api/workspaces/[id]/cards/move/route.js",
   "/api/workspaces/[id]/cards/route": "app/api/workspaces/[id]/cards/route.js",
   "/api/workspaces/[id]/columns/[columnId]/route": "app/api/workspaces/[id]/columns/[columnId]/route.js",
   "/api/workspaces/[id]/columns/reorder/route": "app/api/workspaces/[id]/columns/reorder/route.js",
   "/api/workspaces/[id]/columns/route": "app/api/workspaces/[id]/columns/route.js",
-  "/api/workspaces/route": "app/api/workspaces/route.js",
   "/api/workspaces/[id]/route": "app/api/workspaces/[id]/route.js",
-  "/api/workspaces/[id]/cards/move/route": "app/api/workspaces/[id]/cards/move/route.js",
+  "/api/workspaces/route": "app/api/workspaces/route.js",
   "/auth/page": "app/auth/page.js",
+  "/auth/sign-in/[[...sign-in]]/page": "app/auth/sign-in/[[...sign-in]]/page.js",
   "/auth/sign-up/[[...sign-up]]/page": "app/auth/sign-up/[[...sign-up]]/page.js",
   "/dashboard/[workspaceId]/page": "app/dashboard/[workspaceId]/page.js",
   "/dashboard/page": "app/dashboard/page.js",
-  "/page": "app/page.js",
-  "/auth/sign-in/[[...sign-in]]/page": "app/auth/sign-in/[[...sign-in]]/page.js"
+  "/page": "app/page.js"
 }

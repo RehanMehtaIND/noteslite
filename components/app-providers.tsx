@@ -1,11 +1,11 @@
 "use client";
 
-import { ClerkProvider } from "@clerk/nextjs";
+import { SessionProvider } from "next-auth/react";
 
 export default function AppProviders({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return <ClerkProvider>{children}</ClerkProvider>;
+  return <SessionProvider>{children}</SessionProvider>;
 }
