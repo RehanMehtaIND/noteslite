@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { broadcast } from "@/lib/sse";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -45,6 +46,9 @@ export async function POST(req: Request, context: RouteContext) {
         orderIndex: (lastColumn?.orderIndex ?? -1) + 1,
       },
     });
+
+    const clientId = req.headers.get("x-client-id") || undefined;
+    broadcast(workspaceId, "column:created", column, clientId);
 
     return NextResponse.json({ column }, { status: 201 });
   } catch (error) {

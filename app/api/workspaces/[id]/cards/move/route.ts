@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { broadcast } from "@/lib/sse";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -106,6 +107,9 @@ export async function PATCH(req: Request, context: RouteContext) {
       where: { id: body.cardId },
       include: { tags: true },
     });
+
+    const clientId = req.headers.get("x-client-id") || undefined;
+    broadcast(workspaceId, "card:moved", movedCard, clientId);
 
     return NextResponse.json({ card: movedCard });
   } catch (error) {

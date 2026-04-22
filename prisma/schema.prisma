@@ -24,10 +24,29 @@ model User {
   
   twoFactorEnabled  Boolean     @default(false) @map("two_factor_enabled")
   twoFactorMethod   String?     @default("authenticator") @map("two_factor_method")
+
+  sessions          Session[]
   
   workspaces        Workspace[]
 
   @@map("users")
+}
+
+model Session {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceName   String   
+  browser      String   
+  os           String   
+  ipAddress    String?  @map("ip_address")
+  lastActiveAt DateTime @default(now()) @map("last_active_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  sessionToken String   @unique @map("session_token")
+  isActive     Boolean  @default(true) @map("is_active")
+  
+  @@index([userId])
+  @@map("sessions")
 }
 
 // ─── Workspaces ──────────────────────────────────────────────────────────────

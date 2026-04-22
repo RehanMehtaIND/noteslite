@@ -13,6 +13,16 @@ type WorkspaceItem = {
   _count?: { cards: number; columns: number };
 };
 
+type SessionItem = {
+  id: string;
+  deviceName: string;
+  browser: string;
+  os: string;
+  lastActiveAt: string;
+  isActive: boolean;
+  isCurrent: boolean;
+};
+
 type WorkspaceTag = "active" | "board" | "canvas";
 type View = "dashboard" | "templates";
 type TemplateType = "todo" | "expense" | "notes";
@@ -203,6 +213,10 @@ export default function DashboardPolished() {
   const [emailVerifyError, setEmailVerifyError] = useState<string | null>(null);
 
   const [isUpdating2FA, setIsUpdating2FA] = useState(false);
+
+  // Connected devices / sessions
+  const [sessions, setSessions] = useState<SessionItem[]>([]);
+  const [isLoadingSessions, setIsLoadingSessions] = useState(true);
 
   useEffect(() => {
     if (session?.user?.email) {
@@ -467,6 +481,30 @@ export default function DashboardPolished() {
       cancelled = true;
     };
   }, [router, session?.user?.email, status]);
+
+  // Fetch connected device sessions
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    let cancelled = false;
+
+    async function loadSessions() {
+      setIsLoadingSessions(true);
+      try {
+        const res = await fetch("/api/auth/sessions");
+        if (res.ok && !cancelled) {
+          const data = await res.json();
+          setSessions(Array.isArray(data) ? data : []);
+        }
+      } catch {
+        // Silently fail — devices section is non-critical
+      } finally {
+        if (!cancelled) setIsLoadingSessions(false);
+      }
+    }
+
+    void loadSessions();
+    return () => { cancelled = true; };
+  }, [status]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -1043,36 +1081,73 @@ export default function DashboardPolished() {
                 <div className="device-panel" ref={devicePanelRef}>
                   <div className="device-panel-header">
                     <div className="device-panel-title">Connected Devices</div>
-                    <div className="sync-status"><div className="sync-dot" />Live sync active</div>
+                    <div className="sync-status"><div className="sync-dot" />{sessions.length > 0 ? "Live sync active" : "No sessions"}</div>
                   </div>
                   <div className="device-list">
-                    <div className="device-item">
-                      <div className="device-item-icon">💻<div className="device-active-dot" style={{ background: "#5A8A6A" }} /></div>
-                      <div>
-                        <div className="di-name">MacBook Pro 16&quot;</div>
-                        <div className="di-detail">macOS · Chrome · Active now</div>
-                        <div className="di-sync-bar"><div className="di-sync-fill" style={{ width: "100%" }} /></div>
+                    {isLoadingSessions ? (
+                      <div className="device-item" style={{ opacity: 0.5, justifyContent: "center" }}>
+                        <div className="di-detail">Loading devices…</div>
                       </div>
-                      <div className="di-badge current">Current</div>
-                    </div>
-                    <div className="device-item">
-                      <div className="device-item-icon">📱<div className="device-active-dot" style={{ background: "#5A8A6A" }} /></div>
-                      <div>
-                        <div className="di-name">iPhone 15 Pro</div>
-                        <div className="di-detail">iOS 17 · NoteLite App · 3m ago</div>
-                        <div className="di-sync-bar"><div className="di-sync-fill" style={{ width: "97%" }} /></div>
+                    ) : sessions.length === 0 ? (
+                      <div className="device-item" style={{ opacity: 0.5, justifyContent: "center" }}>
+                        <div className="di-detail">No active sessions found</div>
                       </div>
-                      <div className="di-badge synced">Synced</div>
-                    </div>
-                    <div className="device-item" style={{ opacity: 0.6 }}>
-                      <div className="device-item-icon">⬜</div>
-                      <div>
-                        <div className="di-name">iPad Air</div>
-                        <div className="di-detail">iPadOS 17 · Safari · 2h ago</div>
-                        <div className="di-sync-bar"><div className="di-sync-fill" style={{ width: "60%", opacity: 0.4, animation: "none" }} /></div>
-                      </div>
-                      <div className="di-badge offline">Offline</div>
-                    </div>
+                    ) : (
+                      sessions.map((s) => {
+                        const timeDiff = Date.now() - new Date(s.lastActiveAt).getTime();
+                        const minutesAgo = Math.floor(timeDiff / 60000);
+                        const hoursAgo = Math.floor(timeDiff / 3600000);
+                        const timeLabel = s.isCurrent
+                          ? "Active now"
+                          : minutesAgo < 1
+                          ? "Just now"
+                          : minutesAgo < 60
+                          ? `${minutesAgo}m ago`
+                          : hoursAgo < 24
+                          ? `${hoursAgo}h ago`
+                          : `${Math.floor(hoursAgo / 24)}d ago`;
+
+                        const isDesktop = /windows|mac|linux/i.test(s.os);
+                        const isTablet = /ipad/i.test(s.deviceName);
+                        const icon = isTablet ? "⬜" : isDesktop ? "💻" : "📱";
+
+                        return (
+                          <div
+                            className="device-item"
+                            key={s.id}
+                            style={{ opacity: s.isCurrent ? 1 : 0.8 }}
+                          >
+                            <div className="device-item-icon">
+                              {icon}
+                              {s.isCurrent && (
+                                <div
+                                  className="device-active-dot"
+                                  style={{ background: "#5A8A6A" }}
+                                />
+                              )}
+                            </div>
+                            <div>
+                              <div className="di-name">{s.deviceName}</div>
+                              <div className="di-detail">
+                                {s.os} · {s.browser} · {timeLabel}
+                              </div>
+                              <div className="di-sync-bar">
+                                <div
+                                  className="di-sync-fill"
+                                  style={{
+                                    width: s.isCurrent ? "100%" : minutesAgo < 5 ? "95%" : "60%",
+                                    ...(s.isCurrent ? {} : minutesAgo > 60 ? { opacity: 0.4, animation: "none" } : {}),
+                                  }}
+                                />
+                              </div>
+                            </div>
+                            <div className={`di-badge ${s.isCurrent ? "current" : minutesAgo < 10 ? "synced" : "offline"}`}>
+                              {s.isCurrent ? "Current" : minutesAgo < 10 ? "Synced" : "Idle"}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
 

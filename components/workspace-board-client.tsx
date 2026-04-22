@@ -1,17 +1,11 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type CSSProperties,
-  type DragEvent,
-} from "react";
+import { useMemo, useState, useEffect, useCallback, type CSSProperties, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import { BoardCard } from "@/components/workspace-board/board-card";
 import { BoardSidebar } from "@/components/workspace-board/board-sidebar";
+import { useWorkspaceSync } from "@/hooks/use-workspace-sync";
 import { BLOCK_LABELS } from "@/components/workspace-board/constants";
 import type {
   BlockType,
@@ -169,8 +163,15 @@ function ColumnDropZone({ isVisible, isActive, label, onDragOver, onDrop }: Colu
 
 export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: string }) {
   const router = useRouter();
+  const clientId = useMemo(() => {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+    return `client-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  }, []);
 
   const [board, setBoard] = useState(() => createSeedBoard(workspaceId || "local-workspace"));
+  const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<CanvasViewMode>("board");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("New Workspace");
@@ -187,6 +188,191 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
   const updateBoard = useCallback((updater: (current: BoardState) => BoardState) => {
     setBoard((current) => updater(current));
   }, []);
+
+  useWorkspaceSync(workspaceId, clientId, {
+    onCardCreated: (card: any) => {
+      updateBoard((current) => {
+        // Find the target column
+        const columnId = card.columnId;
+        if (!columnId) return current;
+
+        // Check if card already exists
+        let exists = false;
+        current.columns.forEach(col => {
+          if (col.cards.some(c => c.id === card.id)) exists = true;
+        });
+        if (exists) return current;
+
+        const uiCard = {
+          id: card.id,
+          blocks: card.content || [],
+          collapsed: false,
+        };
+
+        return {
+          ...current,
+          columns: current.columns.map((column) => {
+            if (column.id === columnId) {
+              return { ...column, cards: [...column.cards, uiCard] };
+            }
+            return column;
+          }),
+        };
+      });
+    },
+    onCardUpdated: (card: any) => {
+      updateBoard((current) => {
+        return {
+          ...current,
+          columns: current.columns.map((column) => ({
+            ...column,
+            cards: column.cards.map((c) => {
+              if (c.id === card.id) {
+                return {
+                  ...c,
+                  blocks: card.content || c.blocks,
+                  // Merge other properties if necessary
+                };
+              }
+              return c;
+            }),
+          })),
+        };
+      });
+    },
+    onCardDeleted: ({ id }) => {
+      updateBoard((current) => ({
+        ...current,
+        columns: current.columns.map((column) => ({
+          ...column,
+          cards: column.cards.filter((c) => c.id !== id),
+        })),
+      }));
+    },
+    onCardMoved: (card: any) => {
+      updateBoard((current) => {
+        const sourceColIdx = current.columns.findIndex(col => col.cards.some(c => c.id === card.id));
+        if (sourceColIdx === -1) return current;
+
+        const targetColIdx = current.columns.findIndex(col => col.id === card.columnId);
+        if (targetColIdx === -1) return current;
+
+        const sourceCol = current.columns[sourceColIdx];
+        const cardToMove = sourceCol.cards.find(c => c.id === card.id);
+        if (!cardToMove) return current;
+
+        const nextColumns = current.columns.map(col => ({ ...col, cards: [...col.cards] }));
+
+        // Remove from source
+        nextColumns[sourceColIdx].cards = nextColumns[sourceColIdx].cards.filter(c => c.id !== card.id);
+
+        // Insert into target
+        const insertIndex = card.positionY !== undefined ? card.positionY : nextColumns[targetColIdx].cards.length;
+        nextColumns[targetColIdx].cards.splice(insertIndex, 0, cardToMove);
+
+        return { ...current, columns: nextColumns };
+      });
+    },
+    onColumnCreated: (column: any) => {
+      updateBoard((current) => {
+        if (current.columns.some(c => c.id === column.id)) return current;
+        return {
+          ...current,
+          columns: [...current.columns, { id: column.id, title: column.name || column.title || "Untitled", cards: [] }],
+        };
+      });
+    },
+    onColumnUpdated: (column: any) => {
+      updateBoard((current) => ({
+        ...current,
+        columns: current.columns.map(c => 
+          c.id === column.id ? { ...c, title: column.name || column.title || c.title } : c
+        ),
+      }));
+    },
+    onColumnDeleted: ({ id }) => {
+      updateBoard((current) => ({
+        ...current,
+        columns: current.columns.filter(c => c.id !== id),
+      }));
+    },
+    onColumnsReordered: ({ columns }) => {
+      updateBoard((current) => {
+        // Create a map of current columns for fast lookup
+        const colMap = new Map(current.columns.map(c => [c.id, c]));
+        // Build new columns array based on the ordered IDs returned from the server
+        const newColumns = columns.map((col: any) => colMap.get(col.id) || { id: col.id, title: col.name || col.title || "Untitled", cards: [] });
+        return { ...current, columns: newColumns };
+      });
+    },
+  });
+
+  // ── Fetch initial workspace data from the server ──
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadWorkspace() {
+      try {
+        const res = await fetch(`/api/workspaces/${workspaceId}`);
+        if (!res.ok) return;
+
+        const { workspace } = await res.json();
+        if (cancelled || !workspace) return;
+
+        // Group cards by columnId for efficient mapping
+        const cardsByColumn = new Map<string, any[]>();
+        for (const card of workspace.cards || []) {
+          const colId = card.columnId || "__unassigned__";
+          if (!cardsByColumn.has(colId)) cardsByColumn.set(colId, []);
+          cardsByColumn.get(colId)!.push(card);
+        }
+
+        // Build BoardState columns from the Prisma data
+        const columns = (workspace.columns || []).map((col: any) => ({
+          id: col.id,
+          title: col.name || "Untitled",
+          cards: (cardsByColumn.get(col.id) || []).map((card: any) => ({
+            id: card.id,
+            blocks: Array.isArray(card.content) ? card.content : [],
+            collapsed: false,
+          })),
+        }));
+
+        // If there are cards without a column, add an "Unassigned" column
+        const unassigned = cardsByColumn.get("__unassigned__") || [];
+        if (unassigned.length > 0) {
+          columns.push({
+            id: "__unassigned__",
+            title: "Unassigned",
+            cards: unassigned.map((card: any) => ({
+              id: card.id,
+              blocks: Array.isArray(card.content) ? card.content : [],
+              collapsed: false,
+            })),
+          });
+        }
+
+        // Ensure there's at least one column
+        if (columns.length === 0) {
+          columns.push({ id: crypto.randomUUID(), title: "Unassigned", cards: [] });
+        }
+
+        setBoard({
+          id: workspace.id,
+          title: workspace.name || "Untitled Workspace",
+          columns,
+        });
+        setTitleDraft(workspace.name || "Untitled Workspace");
+      } catch (err) {
+        console.error("Failed to load workspace:", err);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+
+    loadWorkspace();
+    return () => { cancelled = true; };
+  }, [workspaceId]);
 
   const resolvedSelectedColumnId = useMemo(() => {
     if (selectedColumnId && board.columns.some((column) => column.id === selectedColumnId)) {
@@ -484,6 +670,22 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
       }) as CSSProperties & Record<string, string | number>,
     [],
   );
+
+  if (isLoading) {
+    return (
+      <div className="workspace-board-theme min-h-screen bg-[var(--board-canvas)] flex items-center justify-center text-[color:var(--board-text)]">
+        <div className="mx-auto max-w-md rounded-[28px] border border-[color:var(--board-shell-border)] bg-[var(--board-shell-bg)] p-8 shadow-[var(--board-shadow-shell)] backdrop-blur-xl text-center">
+          <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-[color:var(--board-text-soft)] border-t-transparent" />
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--board-text-soft)]">
+            Loading
+          </p>
+          <p className="mt-2 text-[20px] leading-tight tracking-[0.03em] text-[color:var(--board-text-strong)] [font-family:'Cormorant_Garamond','Times_New_Roman',serif]">
+            Preparing your workspace&hellip;
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="workspace-board-theme workspace-board-viewport fixed inset-0 overflow-hidden bg-[var(--board-canvas)] text-[color:var(--board-text)]">
