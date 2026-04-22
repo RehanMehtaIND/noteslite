@@ -81,11 +81,65 @@ export const authOptions: NextAuthOptions = {
   },
   providers,
   callbacks: {
-    async jwt({ token, profile, user }) {
-      if (user?.id) {
+    async jwt({ token, profile, user, account }) {
+      // Resolve the database user ID on sign-in.
+      // For credentials: user.id is already the DB UUID.
+      // For Google OAuth: user.id is the Google sub (not a UUID), so we must
+      // upsert the DB user first to get the correct UUID.
+      let dbUserId: string | null = null;
+
+      const googleProfile = profile as
+        | { sub?: string; email?: string; name?: string; picture?: string }
+        | undefined;
+
+      if (account?.provider === "google" && googleProfile?.sub && googleProfile?.email) {
+        // Google sign-in: resolve or create the DB user by googleId
+        try {
+          const displayName = googleProfile.name || googleProfile.email.split("@")[0] || "User";
+          const dbUser = await prisma.user.upsert({
+            where: { googleId: googleProfile.sub },
+            update: {
+              email: googleProfile.email,
+              name: displayName,
+            },
+            create: {
+              googleId: googleProfile.sub,
+              email: googleProfile.email,
+              name: displayName,
+            },
+            select: { id: true },
+          });
+
+          dbUserId = dbUser.id;
+          token.sub = dbUser.id;          // DB UUID, not Google sub
+          token.googleId = googleProfile.sub;
+          token.email = googleProfile.email;
+          token.name = googleProfile.name;
+          token.picture = googleProfile.picture;
+        } catch (error) {
+          console.error("Failed to upsert Google user:", error);
+        }
+      } else if (user?.id) {
+        // Credentials sign-in: user.id is the DB UUID
+        dbUserId = user.id;
         token.sub = user.id;
 
-        // Create or update session on sign-in
+        if (user.email) {
+          token.email = user.email;
+        }
+
+        if (user.name) {
+          token.name = user.name;
+        }
+
+        const userWithGoogleId = user as { googleId?: unknown } | undefined;
+        if (typeof userWithGoogleId?.googleId === "string") {
+          token.googleId = userWithGoogleId.googleId;
+        }
+      }
+
+      // Create or update device session for ANY sign-in method
+      if (dbUserId) {
         try {
           const reqHeaders = await headers();
           const userAgent = reqHeaders.get("user-agent") || "";
@@ -105,7 +159,7 @@ export const authOptions: NextAuthOptions = {
 
           const existingSession = await prisma.session.findFirst({
             where: {
-              userId: user.id,
+              userId: dbUserId,
               deviceName,
               browser: browserName,
               os: osName,
@@ -127,7 +181,7 @@ export const authOptions: NextAuthOptions = {
           } else {
             await prisma.session.create({
               data: {
-                userId: user.id,
+                userId: dbUserId,
                 deviceName,
                 browser: browserName,
                 os: osName,
@@ -142,40 +196,6 @@ export const authOptions: NextAuthOptions = {
         } catch (error) {
           console.error("Failed to create tracking session:", error);
         }
-      }
-
-      if (user?.email) {
-        token.email = user.email;
-      }
-
-      if (user?.name) {
-        token.name = user.name;
-      }
-
-      const userWithGoogleId = user as { googleId?: unknown } | undefined;
-      if (typeof userWithGoogleId?.googleId === "string") {
-        token.googleId = userWithGoogleId.googleId;
-      }
-
-      const googleProfile = profile as
-        | { sub?: string; email?: string; name?: string; picture?: string }
-        | undefined;
-
-      if (googleProfile?.sub) {
-        token.sub = googleProfile.sub;
-        token.googleId = googleProfile.sub;
-      }
-
-      if (googleProfile?.email) {
-        token.email = googleProfile.email;
-      }
-
-      if (googleProfile?.name) {
-        token.name = googleProfile.name;
-      }
-
-      if (googleProfile?.picture) {
-        token.picture = googleProfile.picture;
       }
 
       return token;
