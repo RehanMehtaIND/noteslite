@@ -3,6 +3,9 @@ import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { z } from "zod";
+import { headers } from "next/headers";
+import { UAParser } from "ua-parser-js";
+import crypto from "crypto";
 
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/password";
@@ -81,6 +84,64 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, profile, user }) {
       if (user?.id) {
         token.sub = user.id;
+
+        // Create or update session on sign-in
+        try {
+          const reqHeaders = await headers();
+          const userAgent = reqHeaders.get("user-agent") || "";
+          const ip = reqHeaders.get("x-forwarded-for") || reqHeaders.get("x-real-ip") || null;
+
+          const parser = new UAParser(userAgent);
+          const device = parser.getDevice();
+          const os = parser.getOS();
+          const browser = parser.getBrowser();
+
+          const deviceName = device.vendor && device.model 
+            ? `${device.vendor} ${device.model}` 
+            : `${os.name || "Unknown"} Device`;
+
+          const browserName = `${browser.name || "Unknown"} ${browser.version || ""}`.trim();
+          const osName = `${os.name || "Unknown"} ${os.version || ""}`.trim();
+
+          const existingSession = await prisma.session.findFirst({
+            where: {
+              userId: user.id,
+              deviceName,
+              browser: browserName,
+              os: osName,
+            }
+          });
+
+          const sessionToken = crypto.randomUUID();
+
+          if (existingSession) {
+            await prisma.session.update({
+              where: { id: existingSession.id },
+              data: {
+                sessionToken,
+                lastActiveAt: new Date(),
+                ipAddress: ip,
+                isActive: true,
+              }
+            });
+          } else {
+            await prisma.session.create({
+              data: {
+                userId: user.id,
+                deviceName,
+                browser: browserName,
+                os: osName,
+                ipAddress: ip,
+                sessionToken,
+                isActive: true,
+              }
+            });
+          }
+
+          token.sessionToken = sessionToken;
+        } catch (error) {
+          console.error("Failed to create tracking session:", error);
+        }
       }
 
       if (user?.email) {
@@ -135,6 +196,10 @@ export const authOptions: NextAuthOptions = {
 
         if (token.picture) {
           session.user.image = token.picture;
+        }
+
+        if (token.sessionToken) {
+          (session as any).sessionToken = token.sessionToken;
         }
       }
 

@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { broadcast } from "@/lib/sse";
 
 type RouteContext = {
   params: Promise<{ id: string; cardId: string }>;
@@ -68,6 +69,9 @@ export async function PATCH(req: Request, context: RouteContext) {
       include: { tags: true },
     });
 
+    const clientId = req.headers.get("x-client-id") || undefined;
+    broadcast(workspaceId, "card:updated", card, clientId);
+
     return NextResponse.json({ card });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -80,7 +84,7 @@ export async function PATCH(req: Request, context: RouteContext) {
   }
 }
 
-export async function DELETE(_: Request, context: RouteContext) {
+export async function DELETE(req: Request, context: RouteContext) {
   const user = await getCurrentUser();
 
   if (!user) {
@@ -129,6 +133,9 @@ export async function DELETE(_: Request, context: RouteContext) {
         });
       }
     });
+
+    const clientId = req.headers.get("x-client-id") || undefined;
+    broadcast(workspaceId, "card:deleted", { id: cardId }, clientId);
 
     return NextResponse.json({ ok: true });
   } catch (error) {
