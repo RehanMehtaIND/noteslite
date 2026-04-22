@@ -1,0 +1,2226 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { signOut, useSession } from "next-auth/react";
+
+type WorkspaceItem = {
+  id: string;
+  name: string;
+  theme: string;
+  createdAt: string;
+  _count?: { cards: number; columns: number };
+};
+
+type WorkspaceTag = "active" | "board" | "canvas";
+type View = "dashboard" | "templates";
+type TemplateType = "todo" | "expense" | "notes";
+
+type TemplateItem = {
+  id: TemplateType;
+  title: string;
+  accent: string;
+  icon: string;
+  meta: string;
+  description: string;
+};
+
+const TEMPLATE_ITEMS: TemplateItem[] = [
+  {
+    id: "todo",
+    title: "To-Do Manager",
+    accent: "#C07850",
+    icon: "✓",
+    meta: "4 cols · Board view",
+    description:
+      "Board-first task management with columns for Backlog, In Progress, Review, and Done.",
+  },
+  {
+    id: "expense",
+    title: "Expense Tracker",
+    accent: "#5A8A6A",
+    icon: "₹",
+    meta: "4 cols · Board view",
+    description:
+      "Track income and expenses across categories with monthly overview cards.",
+  },
+  {
+    id: "notes",
+    title: "Notes Manager",
+    accent: "#5A7A9A",
+    icon: "✎",
+    meta: "Dual view · Canvas + Board",
+    description:
+      "A freeform note-taking workspace with tags, sections, and a canvas view for ideation.",
+  },
+];
+
+const TEMPLATE_COLORS: Record<TemplateType, string> = {
+  todo: "#C07850",
+  expense: "#5A8A6A",
+  notes: "#5A7A9A",
+};
+
+const COLOR_SWATCHES = ["#C07850", "#5A8A6A", "#5A7A9A", "#A06878", "#B8963C", "#7A6AA0"];
+
+const WORKSPACE_FALLBACK_IMAGES = [
+  "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=600&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=600&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1434725039720-aaad6dd32dfe?w=600&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1508739773434-c26b3d09e071?w=600&auto=format&fit=crop",
+];
+
+function initials(name: string) {
+  const parts = name
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .slice(0, 2);
+
+  if (parts.length === 0) return "NL";
+  return parts.map((part) => part[0] ?? "").join("").toUpperCase();
+}
+
+function getTags(name: string, cards: number): WorkspaceTag[] {
+  const lower = name.toLowerCase();
+  const tags: WorkspaceTag[] = [];
+
+  if (cards > 0 || lower.includes("dsa") || lower.includes("transaction")) {
+    tags.push("active");
+  }
+
+  if (
+    lower.includes("dev") ||
+    lower.includes("tracker") ||
+    lower.includes("transaction") ||
+    lower.includes("dsa")
+  ) {
+    tags.push("board");
+  }
+
+  if (lower.includes("poem") || lower.includes("note") || lower.includes("canvas")) {
+    tags.push("canvas");
+  }
+
+  if (tags.length === 0) tags.push("board");
+  if (!tags.includes("canvas") && cards >= 6) tags.push("canvas");
+
+  return tags;
+}
+
+function getThemeAccent(theme: string) {
+  if (theme.startsWith("color:")) {
+    return theme.slice("color:".length);
+  }
+
+  if (theme.startsWith("gradient:")) {
+    const firstColor = theme.slice("gradient:".length).match(/#[0-9a-fA-F]{3,6}/);
+    if (firstColor) return firstColor[0];
+  }
+
+  return "#6BA3BE";
+}
+
+function getBackground(theme: string, index: number) {
+  if (theme.startsWith("image:")) {
+    const imageUrl = theme.slice("image:".length);
+    return `url('${imageUrl}')`;
+  }
+
+  if (theme.startsWith("gradient:")) {
+    return theme.slice("gradient:".length);
+  }
+
+  if (theme.startsWith("color:")) {
+    const color = theme.slice("color:".length);
+    return `linear-gradient(160deg, ${color}66 0%, ${color}20 100%)`;
+  }
+
+  return `url('${WORKSPACE_FALLBACK_IMAGES[index % WORKSPACE_FALLBACK_IMAGES.length]}')`;
+}
+
+export default function DashboardPolished() {
+  const router = useRouter();
+  const { data: session, status } = useSession();
+
+  const userName = session?.user?.name || session?.user?.email || "Notes User";
+  const userEmail = session?.user?.email || "you@example.com";
+
+  const [workspaces, setWorkspaces] = useState<WorkspaceItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  const [view, setView] = useState<View>("dashboard");
+  const [templateSubView, setTemplateSubView] = useState<TemplateType | null>(null);
+
+  const [searchValue, setSearchValue] = useState("");
+  const [workspaceFilter, setWorkspaceFilter] = useState<"all" | WorkspaceTag>("all");
+
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [notifVisible, setNotifVisible] = useState(true);
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newWorkspaceName, setNewWorkspaceName] = useState("");
+  const [newWorkspaceColor, setNewWorkspaceColor] = useState("#C07850");
+  const [isCreating, setIsCreating] = useState(false);
+
+  const [templateOpen, setTemplateOpen] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<TemplateItem | null>(null);
+  const [templateWorkspaceName, setTemplateWorkspaceName] = useState("");
+
+  const [toast, setToast] = useState("");
+  const [pendingWorkspaceIds, setPendingWorkspaceIds] = useState<Set<string>>(new Set());
+
+  const profileWrapRef = useRef<HTMLDivElement | null>(null);
+  const hasRequestedEmailRef = useRef<string | null>(null);
+  const devicePanelRef = useRef<HTMLDivElement | null>(null);
+  const createNameInputRef = useRef<HTMLInputElement | null>(null);
+  const templateNameInputRef = useRef<HTMLInputElement | null>(null);
+  const templateCardRefs = useRef<Partial<Record<TemplateType, HTMLElement | null>>>({});
+
+  const particles = useMemo(
+    () =>
+      Array.from({ length: 18 }, (_, index) => ({
+        id: index,
+        left: `${(index * 19) % 100}%`,
+        bottom: `${(index * 11) % 20}%`,
+        size: `${2 + (index % 4)}px`,
+        duration: `${6 + (index % 9)}s`,
+        delay: `${-(index % 11)}s`,
+        color: COLOR_SWATCHES[index % COLOR_SWATCHES.length],
+      })),
+    []
+  );
+
+  const filteredWorkspaces = useMemo(() => {
+    const q = searchValue.trim().toLowerCase();
+
+    return workspaces.filter((workspace) => {
+      const tags = getTags(workspace.name, workspace._count?.cards ?? 0);
+      const filterMatch = workspaceFilter === "all" || tags.includes(workspaceFilter);
+      const searchMatch = !q || workspace.name.toLowerCase().includes(q);
+
+      return filterMatch && searchMatch;
+    });
+  }, [searchValue, workspaceFilter, workspaces]);
+
+  const workspaceCount = workspaces.length;
+  const totalCards = workspaces.reduce((sum, ws) => sum + (ws._count?.cards ?? 0), 0);
+
+  useEffect(() => {
+    if (!toast) return;
+
+    const t = window.setTimeout(() => setToast(""), 2800);
+    return () => window.clearTimeout(t);
+  }, [toast]);
+
+  useEffect(() => {
+    if (status === "loading") return;
+    if (!session?.user?.email) {
+      setIsLoading(false);
+      return;
+    }
+
+    if (hasRequestedEmailRef.current === session.user.email) {
+      return;
+    }
+
+    hasRequestedEmailRef.current = session.user.email;
+
+    let cancelled = false;
+
+    async function loadWorkspaces() {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const response = await fetch("/api/workspaces", { cache: "no-store" });
+        const payload = (await response.json().catch(() => null)) as
+          | { workspaces?: WorkspaceItem[]; error?: string }
+          | null;
+
+        if (!response.ok) {
+          if (!cancelled) {
+            if (response.status === 401) {
+              router.replace("/auth/sign-in");
+              return;
+            } else {
+              setError(payload?.error ?? "Failed to load workspaces.");
+            }
+          }
+          return;
+        }
+
+        if (!cancelled) {
+          setWorkspaces(payload?.workspaces ?? []);
+        }
+      } catch {
+        if (!cancelled) {
+          setError("Could not reach the server.");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void loadWorkspaces();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router, session?.user?.email, status]);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const active = document.activeElement;
+      const isTyping = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement;
+
+      if (event.key === "Escape") {
+        setCreateOpen(false);
+        setTemplateOpen(false);
+        setProfileOpen(false);
+        setMobileSidebarOpen(false);
+        return;
+      }
+
+      if (isTyping) return;
+
+      if (event.key.toLowerCase() === "n") {
+        setCreateOpen(true);
+      }
+
+      if (event.key.toLowerCase() === "b") {
+        setSidebarCollapsed((current) => !current);
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  useEffect(() => {
+    function onDocumentClick(event: MouseEvent) {
+      if (!profileWrapRef.current) return;
+      if (!profileWrapRef.current.contains(event.target as Node)) {
+        setProfileOpen(false);
+      }
+    }
+
+    document.addEventListener("click", onDocumentClick);
+    return () => document.removeEventListener("click", onDocumentClick);
+  }, []);
+
+  useEffect(() => {
+    if (!createOpen) return;
+
+    const timer = window.setTimeout(() => {
+      createNameInputRef.current?.focus();
+    }, 120);
+
+    return () => window.clearTimeout(timer);
+  }, [createOpen]);
+
+  useEffect(() => {
+    if (!templateOpen) return;
+
+    const timer = window.setTimeout(() => {
+      templateNameInputRef.current?.focus();
+      templateNameInputRef.current?.select();
+    }, 120);
+
+    return () => window.clearTimeout(timer);
+  }, [templateOpen]);
+
+  useEffect(() => {
+    if (view !== "templates" || !templateSubView) return;
+
+    const timer = window.setTimeout(() => {
+      templateCardRefs.current[templateSubView]?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
+    }, 150);
+
+    return () => window.clearTimeout(timer);
+  }, [templateSubView, view]);
+
+  async function createWorkspace(name: string, color: string) {
+    const optimisticId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const optimisticWorkspace: WorkspaceItem = {
+      id: optimisticId,
+      name,
+      theme: `color:${color}`,
+      createdAt: new Date().toISOString(),
+      _count: { cards: 0, columns: 0 },
+    };
+
+    setWorkspaces((current) => [...current, optimisticWorkspace]);
+    setPendingWorkspaceIds((current) => {
+      const next = new Set(current);
+      next.add(optimisticId);
+      return next;
+    });
+    setView("dashboard");
+    setTemplateSubView(null);
+    setIsCreating(true);
+
+    try {
+      const response = await fetch("/api/workspaces", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          theme: `color:${color}`,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | { workspace?: WorkspaceItem; error?: string }
+        | null;
+
+      if (response.status === 401) {
+        setWorkspaces((current) => current.filter((workspace) => workspace.id !== optimisticId));
+        setPendingWorkspaceIds((current) => {
+          const next = new Set(current);
+          next.delete(optimisticId);
+          return next;
+        });
+        router.replace("/auth/sign-in");
+        return;
+      }
+
+      if (!response.ok || !payload?.workspace) {
+        setWorkspaces((current) => current.filter((workspace) => workspace.id !== optimisticId));
+        setPendingWorkspaceIds((current) => {
+          const next = new Set(current);
+          next.delete(optimisticId);
+          return next;
+        });
+        setToast(payload?.error ?? "Could not create workspace.");
+        return;
+      }
+
+      setWorkspaces((current) =>
+        current.map((workspace) =>
+          workspace.id === optimisticId ? (payload.workspace as WorkspaceItem) : workspace
+        )
+      );
+      setPendingWorkspaceIds((current) => {
+        const next = new Set(current);
+        next.delete(optimisticId);
+        return next;
+      });
+      setToast(`✓ "${name}" created`);
+    } catch {
+      setWorkspaces((current) => current.filter((workspace) => workspace.id !== optimisticId));
+      setPendingWorkspaceIds((current) => {
+        const next = new Set(current);
+        next.delete(optimisticId);
+        return next;
+      });
+      setToast("Could not reach the server.");
+    } finally {
+      setIsCreating(false);
+    }
+  }
+
+  function handleOpenWorkspace(workspace: WorkspaceItem) {
+    if (pendingWorkspaceIds.has(workspace.id)) {
+      setToast("Workspace is still being created...");
+      return;
+    }
+
+    router.push(`/dashboard/${workspace.id}`);
+  }
+
+  function handleSidebarTemplateNav(template: TemplateType) {
+    setView("templates");
+    setTemplateSubView(template);
+    setMobileSidebarOpen(false);
+  }
+
+  function handleShowDevicePanel() {
+    setView("dashboard");
+    setTemplateSubView(null);
+    setProfileOpen(false);
+
+    window.setTimeout(() => {
+      devicePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 120);
+  }
+
+  function handleCreateWorkspace() {
+    const name = newWorkspaceName.trim();
+    if (!name) {
+      setToast("Workspace name is required.");
+      return;
+    }
+
+    void createWorkspace(name, newWorkspaceColor);
+    setCreateOpen(false);
+    setNewWorkspaceName("");
+  }
+
+  function handleUseTemplate(template: TemplateItem) {
+    setSelectedTemplate(template);
+    setTemplateWorkspaceName(template.title);
+    setTemplateOpen(true);
+  }
+
+  function handleConfirmTemplate() {
+    const name = templateWorkspaceName.trim();
+    if (!name || !selectedTemplate) {
+      setToast("Workspace name is required.");
+      return;
+    }
+
+    void createWorkspace(name, TEMPLATE_COLORS[selectedTemplate.id]);
+    setTemplateOpen(false);
+  }
+
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen bg-[linear-gradient(180deg,#e8e2d9_0%,#dfd5c8_100%)] px-6 py-10 text-[#5c5752]">
+        Loading workspace...
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="app-root">
+        <div className="ambient">
+          <div className="orb orb1" />
+          <div className="orb orb2" />
+          <div className="orb orb3" />
+          <div className="orb orb4" />
+        </div>
+
+        <div className="particles" aria-hidden="true">
+          {particles.map((particle) => (
+            <span
+              key={particle.id}
+              className="particle"
+              style={{
+                left: particle.left,
+                bottom: particle.bottom,
+                width: particle.size,
+                height: particle.size,
+                background: particle.color,
+                animationDuration: particle.duration,
+                animationDelay: particle.delay,
+              }}
+            />
+          ))}
+        </div>
+
+        <div className="deco-ring" />
+        <div className="deco-ring2" />
+
+        <div className={`sb-backdrop ${mobileSidebarOpen ? "visible" : ""}`} onClick={() => setMobileSidebarOpen(false)} />
+
+        <div className="app">
+          <aside className={`sidebar ${sidebarCollapsed ? "collapsed" : ""} ${mobileSidebarOpen ? "mobile-open" : ""}`}>
+            <div className="sidebar-top">
+              <button
+                className="sb-toggle"
+                type="button"
+                title="Toggle sidebar"
+                onClick={() => setSidebarCollapsed((current) => !current)}
+              >
+                <span className="l1" />
+                <span className="l2" />
+                <span className="l3" />
+              </button>
+              <div className="brand-text">
+                <div className="brand-name">Note<em>Lite</em></div>
+                <div className="brand-tag">Visual Workspace</div>
+              </div>
+            </div>
+
+            <div className="sidebar-body">
+              <div className="sb-section-lbl">Navigation</div>
+              <button
+                type="button"
+                className={`sb-item ${view === "dashboard" ? "active" : ""}`}
+                onClick={() => {
+                  setView("dashboard");
+                  setTemplateSubView(null);
+                  setMobileSidebarOpen(false);
+                }}
+              >
+                <div className="sb-icon">⊞</div>
+                <span className="sb-lbl">Dashboard</span>
+              </button>
+
+              <div className="sb-section-lbl" style={{ marginTop: 4 }}>Templates</div>
+              <button
+                type="button"
+                className={`sb-item ${view === "templates" && templateSubView === "todo" ? "active" : ""}`}
+                onClick={() => handleSidebarTemplateNav("todo")}
+              >
+                <div className="sb-icon" style={{ background: "rgba(192,120,80,0.12)" }}>✓</div>
+                <span className="sb-lbl">To-Do Manager</span>
+                <span className="tmpl-badge">tmpl</span>
+              </button>
+              <button
+                type="button"
+                className={`sb-item ${view === "templates" && templateSubView === "expense" ? "active" : ""}`}
+                onClick={() => handleSidebarTemplateNav("expense")}
+              >
+                <div className="sb-icon" style={{ background: "rgba(90,138,106,0.12)" }}>₹</div>
+                <span className="sb-lbl">Expense Tracker</span>
+                <span className="tmpl-badge">tmpl</span>
+              </button>
+              <button
+                type="button"
+                className={`sb-item ${view === "templates" && templateSubView === "notes" ? "active" : ""}`}
+                onClick={() => handleSidebarTemplateNav("notes")}
+              >
+                <div className="sb-icon" style={{ background: "rgba(90,122,154,0.12)" }}>✎</div>
+                <span className="sb-lbl">Notes Manager</span>
+                <span className="tmpl-badge">tmpl</span>
+              </button>
+
+              <div className="sb-section-lbl" style={{ marginTop: 4 }}>Workspaces</div>
+              {workspaces.slice(0, 8).map((workspace) => (
+                <button
+                  key={workspace.id}
+                  className="sb-item"
+                  type="button"
+                  onClick={() => handleOpenWorkspace(workspace)}
+                  aria-busy={pendingWorkspaceIds.has(workspace.id)}
+                >
+                  <div className="sb-icon" style={{ background: "rgba(90,122,154,0.12)" }}>
+                    <div className="ws-dot-sb" style={{ background: getThemeAccent(workspace.theme) }} />
+                  </div>
+                  <span className="sb-lbl">{workspace.name}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="sidebar-footer">
+              <button className="user-card" type="button" onClick={() => setToast("Profile settings coming soon") }>
+                <div className="user-av">{initials(userName).slice(0, 1)}</div>
+                <div className="user-info-sb">
+                  <div className="user-name">{userName}</div>
+                  <div className="user-plan">Basic plan</div>
+                </div>
+              </button>
+            </div>
+          </aside>
+
+          <div className="main">
+            <div className="topbar">
+              <button className="mobile-ham" type="button" onClick={() => setMobileSidebarOpen(true)}>
+                <span />
+                <span />
+                <span />
+              </button>
+
+              <div className="topbar-context">
+                <div className="ctx-page">{view === "dashboard" ? "Dashboard" : "Templates"}</div>
+                {templateSubView ? <div className="ctx-sep">/</div> : null}
+                {templateSubView ? (
+                  <div className="ctx-sub">{TEMPLATE_ITEMS.find((item) => item.id === templateSubView)?.title}</div>
+                ) : null}
+              </div>
+
+              <div className="devices-row" title="3 devices synced">
+                <div className="sync-wave">
+                  <div className="sw" />
+                  <div className="sw" />
+                  <div className="sw" />
+                  <div className="sw" />
+                  <div className="sw" />
+                </div>
+                <div className="devices-sep" />
+                <div className="device-icon synced" title="MacBook Pro - Active">💻</div>
+                <div className="device-icon synced" title="iPhone - Synced">📱</div>
+                <div className="device-icon" title="iPad - Last synced 2h ago" style={{ opacity: 0.5 }}>⬜</div>
+              </div>
+
+              <div className="search-bar">
+                <span className="search-icon">⌕</span>
+                <input
+                  type="text"
+                  placeholder="Search workspaces..."
+                  value={searchValue}
+                  onChange={(event) => setSearchValue(event.target.value)}
+                />
+              </div>
+
+              <button className="new-btn" type="button" onClick={() => setCreateOpen(true)}>
+                <span>+</span>
+                <span>New Workspace</span>
+              </button>
+
+              <div ref={profileWrapRef} style={{ position: "relative" }}>
+                <button className="profile-btn" id="profileBtn" type="button" onClick={() => setProfileOpen((current) => !current)}>
+                  {initials(userName).slice(0, 1)}
+                  <div className="online-dot" />
+                  {notifVisible ? <div className="notif-badge" /> : null}
+                </button>
+
+                <div className={`profile-dropdown ${profileOpen ? "open" : ""}`}>
+                  <div className="pd-header">
+                    <div className="pd-av">{initials(userName).slice(0, 1)}</div>
+                    <div>
+                      <div className="pd-name">{userName}</div>
+                      <div className="pd-email">{userEmail}</div>
+                      <div className="pd-plan">Basic</div>
+                    </div>
+                  </div>
+                  <div className="pd-section">
+                    <button className="pd-item" type="button" onClick={() => { setToast("Opening profile..."); setProfileOpen(false); }}>
+                      <div className="pd-item-icon">👤</div>
+                      Profile Settings
+                    </button>
+                    <button className="pd-item" type="button" onClick={() => { setToast("Opening preferences..."); setProfileOpen(false); }}>
+                      <div className="pd-item-icon">⚙️</div>
+                      Preferences
+                    </button>
+                    <button className="pd-item" type="button" onClick={() => { setToast("No new notifications"); setNotifVisible(false); setProfileOpen(false); }}>
+                      <div className="pd-item-icon">🔔</div>
+                      Notifications
+                    </button>
+                    <button className="pd-item" type="button" onClick={() => { setToast("Keyboard shortcuts"); setProfileOpen(false); }}>
+                      <div className="pd-item-icon">⌨</div>
+                      Shortcuts
+                    </button>
+                    <button className="pd-item" type="button" onClick={handleShowDevicePanel}>
+                      <div className="pd-item-icon">📱</div>
+                      Devices (3)
+                    </button>
+                  </div>
+                  <div className="pd-divider" />
+                  <div className="pd-section" style={{ paddingTop: 4 }}>
+                    <button className="pd-item danger" type="button" onClick={() => void signOut({ callbackUrl: "/auth/sign-in" })}>
+                      <div className="pd-item-icon">🚪</div>
+                      Sign Out
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="content">
+              {isLoading ? <div className="info-line">Loading workspace data...</div> : null}
+              {error ? <div className="error-line">{error}</div> : null}
+
+              <div className={`view-panel ${view === "dashboard" ? "active" : ""}`}>
+                <div className="stats-row">
+                  <div className="stat-card">
+                    <div className="stat-accent" style={{ background: "linear-gradient(90deg,#C07850,#D4956E)" }} />
+                    <div className="stat-label">Workspaces</div>
+                    <div className="stat-value">{workspaceCount}</div>
+                    <div className="stat-sub">2 active this week</div>
+                    <div className="stat-glyph">⊞</div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="stat-accent" style={{ background: "linear-gradient(90deg,#5A8A6A,#7AAF8A)" }} />
+                    <div className="stat-label">Total Cards</div>
+                    <div className="stat-value">{totalCards}</div>
+                    <div className="stat-sub">Across all workspaces</div>
+                    <div className="stat-glyph">▤</div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="stat-accent" style={{ background: "linear-gradient(90deg,#5A7A9A,#7A9ABB)" }} />
+                    <div className="stat-label">Templates Used</div>
+                    <div className="stat-value">{TEMPLATE_ITEMS.length}</div>
+                    <div className="stat-sub">This month</div>
+                    <div className="stat-glyph">◈</div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="stat-accent" style={{ background: "linear-gradient(90deg,#A06878,#C08898)" }} />
+                    <div className="stat-label">Devices Synced</div>
+                    <div className="stat-value">3</div>
+                    <div className="stat-sub">Last sync: now</div>
+                    <div className="stat-glyph">📱</div>
+                  </div>
+                </div>
+
+                <div className="section-header">
+                  <div className="section-title">Your Workspaces</div>
+                  <div className="section-count">{filteredWorkspaces.length}</div>
+                  <div className="section-action" onClick={() => setToast("Viewing all...")}>View all →</div>
+                </div>
+
+                <div className="filter-row">
+                  {(["all", "active", "board", "canvas"] as const).map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      className={`chip ${workspaceFilter === tag ? "active" : ""}`}
+                      onClick={() => setWorkspaceFilter(tag)}
+                    >
+                      {tag === "all" ? "All" : tag[0].toUpperCase() + tag.slice(1)}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="ws-frame">
+                  <div className="workspace-grid">
+                    {filteredWorkspaces.map((workspace, index) => {
+                      const cards = workspace._count?.cards ?? 0;
+                      const cols = workspace._count?.columns ?? 0;
+                      const tags = getTags(workspace.name, cards);
+                      const isPending = pendingWorkspaceIds.has(workspace.id);
+
+                      return (
+                        <button
+                          key={workspace.id}
+                          type="button"
+                          className={`ws-card ${isPending ? "pending" : ""}`}
+                          onClick={() => handleOpenWorkspace(workspace)}
+                          aria-busy={isPending}
+                        >
+                          <div className="ws-bg" style={{ backgroundImage: getBackground(workspace.theme, index) }} />
+                          <div className="ws-overlay" />
+                          <div className="ws-accent-strip" style={{ background: getThemeAccent(workspace.theme) }} />
+                          <div className="ws-label-wrap">
+                            <div className="ws-label">{workspace.name}</div>
+                          </div>
+                          <div className="ws-info">
+                            <div className="ws-meta-txt">{isPending ? "Creating..." : `${cards} cards · ${cols} cols`}</div>
+                            <div className="ws-tags">
+                              {(isPending ? ["active"] : tags.slice(0, 2)).map((tag) => (
+                                <div key={`${workspace.id}-${tag}`} className={`wt ${tag === "active" ? "ta" : tag === "board" ? "tb" : "tc"}`}>
+                                  {isPending ? "New" : tag[0].toUpperCase() + tag.slice(1)}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+
+                    <button className="ws-add" type="button" onClick={() => setCreateOpen(true)}>
+                      <div className="ws-add-icon">+</div>
+                      <div className="ws-add-txt">New Workspace</div>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="section-header">
+                  <div className="section-title">Devices</div>
+                  <div className="sync-status" style={{ marginLeft: "auto" }}>
+                    <div className="sync-dot" />All synced
+                  </div>
+                </div>
+
+                <div className="device-panel" ref={devicePanelRef}>
+                  <div className="device-panel-header">
+                    <div className="device-panel-title">Connected Devices</div>
+                    <div className="sync-status"><div className="sync-dot" />Live sync active</div>
+                  </div>
+                  <div className="device-list">
+                    <div className="device-item">
+                      <div className="device-item-icon">💻<div className="device-active-dot" style={{ background: "#5A8A6A" }} /></div>
+                      <div>
+                        <div className="di-name">MacBook Pro 16&quot;</div>
+                        <div className="di-detail">macOS · Chrome · Active now</div>
+                        <div className="di-sync-bar"><div className="di-sync-fill" style={{ width: "100%" }} /></div>
+                      </div>
+                      <div className="di-badge current">Current</div>
+                    </div>
+                    <div className="device-item">
+                      <div className="device-item-icon">📱<div className="device-active-dot" style={{ background: "#5A8A6A" }} /></div>
+                      <div>
+                        <div className="di-name">iPhone 15 Pro</div>
+                        <div className="di-detail">iOS 17 · NoteLite App · 3m ago</div>
+                        <div className="di-sync-bar"><div className="di-sync-fill" style={{ width: "97%" }} /></div>
+                      </div>
+                      <div className="di-badge synced">Synced</div>
+                    </div>
+                    <div className="device-item" style={{ opacity: 0.6 }}>
+                      <div className="device-item-icon">⬜</div>
+                      <div>
+                        <div className="di-name">iPad Air</div>
+                        <div className="di-detail">iPadOS 17 · Safari · 2h ago</div>
+                        <div className="di-sync-bar"><div className="di-sync-fill" style={{ width: "60%", opacity: 0.4, animation: "none" }} /></div>
+                      </div>
+                      <div className="di-badge offline">Offline</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="two-col">
+                  <div>
+                    <div className="section-header" style={{ marginBottom: 10 }}><div className="section-title">Recent Activity</div></div>
+                    <div className="activity-list">
+                      <div className="activity-item">
+                        <div className="activity-dot" style={{ background: "#C07850" }} />
+                        <div className="activity-info">
+                          <div className="activity-action">Card added to <strong>DSA Notes</strong></div>
+                          <div className="activity-detail">Binary Trees - In Progress column</div>
+                        </div>
+                        <div className="activity-time">2m ago</div>
+                      </div>
+                      <div className="activity-item">
+                        <div className="activity-dot" style={{ background: "#5A8A6A" }} />
+                        <div className="activity-info">
+                          <div className="activity-action">Synced from iPhone</div>
+                          <div className="activity-detail">Transactions workspace - 3 cards updated</div>
+                        </div>
+                        <div className="activity-time">18m ago</div>
+                      </div>
+                      <div className="activity-item">
+                        <div className="activity-dot" style={{ background: "#5A7A9A" }} />
+                        <div className="activity-info">
+                          <div className="activity-action">Used Expense Tracker template</div>
+                          <div className="activity-detail">New workspace created from template</div>
+                        </div>
+                        <div className="activity-time">1h ago</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="section-header" style={{ marginBottom: 10 }}><div className="section-title">Quick Notes</div></div>
+                    <div className="quick-panel">
+                      <div className="quick-header">
+                        <div className="quick-title">Pinned</div>
+                        <button className="quick-add-btn" type="button" onClick={() => setToast("Note added")}>+</button>
+                      </div>
+                      <div className="quick-notes">
+                        <div className="quick-note" style={{ ["--nc" as string]: "#C07850", ["--nb" as string]: "rgba(192,120,80,0.07)" }}>
+                          <div className="qn-title">DSA Revision</div>
+                          BFS/DFS pattern - revisit after graphs.
+                        </div>
+                        <div className="quick-note" style={{ ["--nc" as string]: "#5A7A9A", ["--nb" as string]: "rgba(90,122,154,0.07)" }}>
+                          <div className="qn-title">Game Dev Idea</div>
+                          A* for enemy nav in tilemap levels.
+                        </div>
+                        <div className="quick-note" style={{ ["--nc" as string]: "#A06878", ["--nb" as string]: "rgba(160,104,120,0.07)" }}>
+                          <div className="qn-title">Poem Draft</div>
+                          Mountain sonnet - third stanza unresolved.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className={`view-panel ${view === "templates" ? "active" : ""}`}>
+                <div className="section-header" style={{ marginBottom: 8 }}>
+                  <div className="section-title">Templates</div>
+                  <div className="section-count">{TEMPLATE_ITEMS.length}</div>
+                </div>
+                <p style={{ fontSize: 12, color: "var(--text3)", marginBottom: 20, lineHeight: 1.6 }}>
+                  Start with a pre-built workspace structure. Each template is fully customizable after creation.
+                </p>
+
+                <div className="tmpl-grid">
+                  {TEMPLATE_ITEMS.map((template) => (
+                    <article
+                      key={template.id}
+                      className="tmpl-card"
+                      ref={(el) => {
+                        templateCardRefs.current[template.id] = el;
+                      }}
+                      onClick={() => handleUseTemplate(template)}
+                    >
+                      <div className="tmpl-preview" style={{ background: `linear-gradient(135deg,${template.accent}22,${template.accent}12)` }}>
+                        <div className="tmpl-preview-inner">
+                          <div className="tmpl-row dark" style={{ width: "72%", background: `${template.accent}44` }} />
+                          <div className="tmpl-row" style={{ width: "95%" }} />
+                          <div className="tmpl-row" style={{ width: "84%" }} />
+                          <div className="tmpl-row" style={{ width: "68%" }} />
+                        </div>
+                      </div>
+                      <div className="tmpl-body">
+                        <div className="tmpl-icon-wrap" style={{ background: `${template.accent}22` }}>{template.icon}</div>
+                        <div className="tmpl-name">{template.title}</div>
+                        <div className="tmpl-desc">{template.description}</div>
+                        <div className="tmpl-footer">
+                          <div className="tmpl-meta">{template.meta}</div>
+                          <button className="tmpl-use-btn" type="button" style={{ background: `${template.accent}22`, color: template.accent }}>
+                            Use Template →
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className={`overlay ${createOpen ? "show" : ""}`} onClick={() => setCreateOpen(false)}>
+          <div className="modal" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-title">New Workspace</div>
+            <div className="modal-sub">Name your thinking space and pick an accent colour.</div>
+            <div className="modal-label">Workspace Name</div>
+            <input
+              ref={createNameInputRef}
+              className="modal-input"
+              type="text"
+              placeholder="e.g. Research, Sprint 4, Novel..."
+              value={newWorkspaceName}
+              onChange={(event) => setNewWorkspaceName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") handleCreateWorkspace();
+                if (event.key === "Escape") setCreateOpen(false);
+              }}
+            />
+            <div className="modal-label">Accent Colour</div>
+            <div className="color-row">
+              {COLOR_SWATCHES.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  className={`color-swatch ${newWorkspaceColor === color ? "sel" : ""}`}
+                  style={{ background: color }}
+                  onClick={() => setNewWorkspaceColor(color)}
+                />
+              ))}
+            </div>
+            <div className="modal-actions">
+              <button className="btn-cancel" type="button" onClick={() => setCreateOpen(false)}>Cancel</button>
+              <button className="btn-confirm" type="button" disabled={isCreating} onClick={handleCreateWorkspace}>
+                {isCreating ? "Creating..." : "Create"}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className={`overlay ${templateOpen ? "show" : ""}`} onClick={() => setTemplateOpen(false)}>
+          <div className="modal" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-title">Use - {selectedTemplate?.title ?? "Template"}</div>
+            <div className="modal-sub">Name your new workspace based on this template.</div>
+            <div className="modal-label">Workspace Name</div>
+            <input
+              ref={templateNameInputRef}
+              className="modal-input"
+              type="text"
+              value={templateWorkspaceName}
+              onChange={(event) => setTemplateWorkspaceName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") handleConfirmTemplate();
+                if (event.key === "Escape") setTemplateOpen(false);
+              }}
+            />
+            <div className="modal-actions">
+              <button className="btn-cancel" type="button" onClick={() => setTemplateOpen(false)}>Cancel</button>
+              <button className="btn-confirm" type="button" disabled={isCreating} onClick={handleConfirmTemplate}>
+                {isCreating ? "Creating..." : "Create from Template"}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className={`toast ${toast ? "show" : ""}`}>{toast}</div>
+      </div>
+
+      <style jsx global>{`
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,700&family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&display=swap');
+      `}</style>
+
+      <style jsx>{`
+        *, *::before, *::after { box-sizing: border-box; }
+
+        .app-root {
+          --bg: #ebe4da;
+          --bg2: #e3ddd4;
+          --surface: #f5f0e8;
+          --surface2: #fdfaf5;
+          --border: rgba(44, 38, 28, 0.07);
+          --border2: rgba(44, 38, 28, 0.12);
+          --text: #2c2018;
+          --text2: #6b6155;
+          --text3: #a09080;
+          --accent: #c07850;
+          --green: #5a8a6a;
+          --blue: #5a7a9a;
+          --rose: #a06878;
+          --frame: #6ba3be;
+          --shadow: 0 2px 20px rgba(44, 38, 28, 0.09);
+          --shadow-lg: 0 8px 48px rgba(44, 38, 28, 0.14);
+          --shadow-card: 0 4px 28px rgba(44, 38, 28, 0.11);
+          --r: 16px;
+          --r-lg: 22px;
+          --sb: 230px;
+          --sb-col: 62px;
+          height: 100vh;
+          overflow: hidden;
+          font-family: "DM Sans", sans-serif;
+          background: var(--bg);
+          color: var(--text);
+          position: relative;
+        }
+
+        .ambient, .particles {
+          position: fixed;
+          inset: 0;
+          pointer-events: none;
+          z-index: 0;
+          overflow: hidden;
+        }
+
+        .orb {
+          position: absolute;
+          border-radius: 50%;
+          filter: blur(60px);
+          opacity: 0.18;
+          animation: orbDrift linear infinite;
+        }
+
+        .orb1 { width: 340px; height: 340px; background: radial-gradient(#c07850, transparent); left: -80px; top: 10%; animation-duration: 28s; }
+        .orb2 { width: 280px; height: 280px; background: radial-gradient(#5a7a9a, transparent); right: -60px; top: 30%; animation-duration: 34s; animation-delay: -12s; }
+        .orb3 { width: 220px; height: 220px; background: radial-gradient(#a06878, transparent); left: 30%; bottom: 5%; animation-duration: 22s; animation-delay: -7s; }
+        .orb4 { width: 180px; height: 180px; background: radial-gradient(#5a8a6a, transparent); right: 25%; top: 60%; animation-duration: 40s; animation-delay: -20s; }
+
+        .particle {
+          position: absolute;
+          border-radius: 50%;
+          opacity: 0;
+          animation: particleFloat linear infinite;
+        }
+
+        .deco-ring, .deco-ring2 {
+          position: fixed;
+          border-radius: 50%;
+          pointer-events: none;
+          z-index: 0;
+          animation: ringPulse 8s ease-in-out infinite;
+        }
+
+        .deco-ring {
+          width: 320px;
+          height: 320px;
+          left: -120px;
+          bottom: -100px;
+          border: 1.5px solid rgba(192, 120, 80, 0.08);
+        }
+
+        .deco-ring2 {
+          width: 200px;
+          height: 200px;
+          right: -60px;
+          top: 100px;
+          border: 1px solid rgba(107, 163, 190, 0.07);
+          animation-duration: 9s;
+          animation-delay: -3s;
+        }
+
+        .app { display: flex; height: 100vh; overflow: hidden; position: relative; z-index: 1; }
+
+        .sidebar {
+          width: var(--sb);
+          flex-shrink: 0;
+          background: var(--surface);
+          border-right: 1px solid var(--border2);
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          transition: width 0.3s cubic-bezier(0.22, 1, 0.36, 1), transform 0.3s;
+          position: relative;
+          z-index: 20;
+        }
+
+        .sidebar.collapsed { width: var(--sb-col); }
+
+        .sidebar-top {
+          display: flex;
+          align-items: center;
+          padding: 18px 14px 16px;
+          border-bottom: 1px solid var(--border);
+          gap: 10px;
+          min-height: 66px;
+          flex-shrink: 0;
+        }
+
+        .sb-toggle {
+          width: 30px;
+          height: 30px;
+          flex-shrink: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 4px;
+          cursor: pointer;
+          border-radius: 8px;
+          transition: background 0.15s;
+          border: none;
+          background: none;
+          padding: 0;
+        }
+
+        .sb-toggle:hover { background: var(--bg2); }
+
+        .sb-toggle span {
+          display: block;
+          height: 1.5px;
+          background: var(--text3);
+          border-radius: 2px;
+          transition: all 0.25s;
+        }
+
+        .sb-toggle .l1 { width: 14px; }
+        .sb-toggle .l2 { width: 10px; }
+        .sb-toggle .l3 { width: 12px; }
+        .sidebar.collapsed .sb-toggle .l2,
+        .sidebar.collapsed .sb-toggle .l3 { width: 14px; }
+
+        .brand-text { overflow: hidden; white-space: nowrap; transition: opacity 0.2s, max-width 0.25s; max-width: 180px; }
+        .sidebar.collapsed .brand-text { opacity: 0; max-width: 0; pointer-events: none; }
+
+        .brand-name {
+          font-family: "Playfair Display", serif;
+          font-style: italic;
+          font-weight: 700;
+          font-size: 17px;
+          color: var(--text);
+          letter-spacing: 0.01em;
+          line-height: 1.1;
+        }
+
+        .brand-name em { font-style: normal; color: var(--accent); }
+
+        .brand-tag {
+          font-size: 9px;
+          color: var(--text3);
+          letter-spacing: 0.14em;
+          font-weight: 500;
+          margin-top: 1px;
+          font-family: "Syne", sans-serif;
+          text-transform: uppercase;
+        }
+
+        .sidebar-body {
+          flex: 1;
+          overflow-y: auto;
+          overflow-x: hidden;
+          padding: 8px;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .sidebar-body::-webkit-scrollbar { width: 0; }
+
+        .sb-section-lbl {
+          font-size: 8.5px;
+          letter-spacing: 0.22em;
+          text-transform: uppercase;
+          color: var(--text3);
+          font-family: "Syne", sans-serif;
+          font-weight: 600;
+          padding: 10px 10px 4px;
+          overflow: hidden;
+          white-space: nowrap;
+          transition: opacity 0.2s;
+        }
+
+        .sidebar.collapsed .sb-section-lbl { opacity: 0; pointer-events: none; }
+
+        .sb-item {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 8px 10px;
+          border-radius: 10px;
+          cursor: pointer;
+          font-size: 13px;
+          font-weight: 500;
+          color: var(--text2);
+          transition: all 0.15s;
+          position: relative;
+          white-space: nowrap;
+          min-height: 38px;
+          border: none;
+          background: transparent;
+          text-align: left;
+        }
+
+        .sb-item:hover { background: var(--bg2); color: var(--text); }
+        .sb-item.active { background: rgba(192, 120, 80, 0.1); color: var(--text); }
+
+        .sb-item.active::before {
+          content: "";
+          position: absolute;
+          left: 0;
+          top: 18%;
+          bottom: 18%;
+          width: 3px;
+          border-radius: 0 3px 3px 0;
+          background: var(--accent);
+        }
+
+        .sb-icon {
+          width: 28px;
+          height: 28px;
+          border-radius: 8px;
+          flex-shrink: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 13px;
+          background: var(--bg2);
+          transition: background 0.15s;
+        }
+
+        .sb-item.active .sb-icon,
+        .sb-item:hover .sb-icon { background: var(--surface2); }
+
+        .sb-lbl { overflow: hidden; transition: opacity 0.2s, max-width 0.2s; max-width: 160px; }
+        .sidebar.collapsed .sb-lbl { opacity: 0; max-width: 0; pointer-events: none; }
+
+        .ws-dot-sb { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+        .tmpl-badge {
+          margin-left: auto;
+          font-size: 8px;
+          padding: 2px 6px;
+          border-radius: 6px;
+          background: rgba(90, 122, 154, 0.12);
+          color: var(--blue);
+          font-family: "Syne", sans-serif;
+          font-weight: 700;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          flex-shrink: 0;
+          transition: opacity 0.2s;
+        }
+
+        .sidebar.collapsed .tmpl-badge { opacity: 0; pointer-events: none; }
+
+        .sidebar-footer { padding: 10px 8px; border-top: 1px solid var(--border); flex-shrink: 0; }
+
+        .user-card {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 8px 10px;
+          border-radius: 10px;
+          cursor: pointer;
+          transition: background 0.15s;
+          white-space: nowrap;
+          border: none;
+          background: transparent;
+          width: 100%;
+          text-align: left;
+        }
+
+        .user-card:hover { background: var(--bg2); }
+
+        .user-av {
+          width: 30px;
+          height: 30px;
+          border-radius: 50%;
+          flex-shrink: 0;
+          background: linear-gradient(135deg, var(--accent), var(--rose));
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-family: "Syne", sans-serif;
+          font-size: 12px;
+          font-weight: 700;
+          color: white;
+        }
+
+        .user-info-sb { overflow: hidden; transition: opacity 0.2s, max-width 0.2s; max-width: 160px; }
+        .sidebar.collapsed .user-info-sb { opacity: 0; max-width: 0; pointer-events: none; }
+        .user-name { font-size: 12px; font-weight: 600; color: var(--text); }
+        .user-plan { font-size: 10px; color: var(--text3); }
+
+        .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; position: relative; z-index: 1; }
+
+        .topbar {
+          height: 58px;
+          flex-shrink: 0;
+          background: rgba(245, 240, 232, 0.88);
+          backdrop-filter: blur(12px);
+          border-bottom: 1px solid var(--border2);
+          display: flex;
+          align-items: center;
+          padding: 0 20px;
+          gap: 12px;
+          position: relative;
+          z-index: 10;
+        }
+
+        .mobile-ham {
+          display: none;
+          width: 34px;
+          height: 34px;
+          border-radius: 9px;
+          border: 1px solid var(--border2);
+          background: var(--surface2);
+          cursor: pointer;
+          align-items: center;
+          justify-content: center;
+          flex-direction: column;
+          gap: 4px;
+          flex-shrink: 0;
+        }
+
+        .mobile-ham span { display: block; width: 13px; height: 1.5px; background: var(--text2); border-radius: 2px; }
+
+        .topbar-context { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
+        .ctx-page { font-family: "Syne", sans-serif; font-weight: 700; font-size: 13px; color: var(--text); letter-spacing: 0.04em; }
+        .ctx-sep { font-size: 11px; color: var(--border2); }
+        .ctx-sub { font-size: 11px; color: var(--text3); font-weight: 400; }
+
+        .devices-row { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+        .devices-sep { width: 1px; height: 14px; background: var(--border2); }
+
+        .device-icon {
+          width: 26px;
+          height: 26px;
+          border-radius: 7px;
+          border: 1px solid var(--border2);
+          background: var(--surface2);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 12px;
+          color: var(--text3);
+          position: relative;
+        }
+
+        .device-icon.synced { border-color: rgba(90, 138, 106, 0.3); background: rgba(90, 138, 106, 0.07); }
+        .device-icon.synced::after {
+          content: "";
+          position: absolute;
+          top: 2px;
+          right: 2px;
+          width: 5px;
+          height: 5px;
+          border-radius: 50%;
+          background: var(--green);
+          animation: pulse 2s ease-in-out infinite;
+        }
+
+        .sync-wave { display: flex; align-items: center; gap: 2px; height: 14px; }
+        .sw { width: 2.5px; border-radius: 2px; background: var(--green); animation: waveBar 1.2s ease-in-out infinite; }
+        .sw:nth-child(1) { height: 6px; animation-delay: 0s; }
+        .sw:nth-child(2) { height: 10px; animation-delay: 0.15s; }
+        .sw:nth-child(3) { height: 14px; animation-delay: 0.3s; }
+        .sw:nth-child(4) { height: 10px; animation-delay: 0.45s; }
+        .sw:nth-child(5) { height: 6px; animation-delay: 0.6s; }
+
+        .search-bar {
+          flex: 1;
+          max-width: 280px;
+          height: 32px;
+          border-radius: 20px;
+          background: var(--bg2);
+          border: 1px solid var(--border2);
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 0 12px;
+          margin-left: auto;
+        }
+
+        .search-bar input {
+          flex: 1;
+          background: none;
+          border: none;
+          outline: none;
+          font-family: "DM Sans", sans-serif;
+          font-size: 12px;
+          color: var(--text);
+        }
+
+        .search-bar input::placeholder { color: var(--text3); }
+        .search-icon { font-size: 12px; color: var(--text3); }
+
+        .new-btn {
+          height: 32px;
+          padding: 0 14px;
+          border-radius: 9px;
+          border: none;
+          background: var(--text);
+          color: var(--surface2);
+          font-family: "Syne", sans-serif;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          transition: all 0.15s;
+          flex-shrink: 0;
+        }
+
+        .new-btn:hover { background: #3d3025; transform: translateY(-1px); }
+
+        .profile-btn {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, var(--accent), var(--rose));
+          border: 2px solid rgba(255, 255, 255, 0.6);
+          cursor: pointer;
+          flex-shrink: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-family: "Syne", sans-serif;
+          font-size: 12px;
+          font-weight: 700;
+          color: white;
+          position: relative;
+          box-shadow: 0 2px 10px rgba(192, 120, 80, 0.3);
+        }
+
+        .online-dot {
+          position: absolute;
+          bottom: 1px;
+          right: 1px;
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: #5a8a6a;
+          border: 1.5px solid var(--surface);
+          animation: pulse 2.5s ease-in-out infinite;
+        }
+
+        .notif-badge {
+          position: absolute;
+          top: -2px;
+          right: -2px;
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: var(--rose);
+          border: 1.5px solid var(--surface);
+        }
+
+        .profile-dropdown {
+          position: absolute;
+          top: calc(100% + 10px);
+          right: 0;
+          width: 240px;
+          background: var(--surface2);
+          border: 1px solid var(--border2);
+          border-radius: 16px;
+          box-shadow: var(--shadow-lg);
+          overflow: hidden;
+          z-index: 200;
+          opacity: 0;
+          pointer-events: none;
+          transform: translateY(-6px) scale(0.97);
+          transition: opacity 0.2s, transform 0.2s;
+          transform-origin: top right;
+        }
+
+        .profile-dropdown.open { opacity: 1; pointer-events: auto; transform: none; }
+
+        .pd-header { padding: 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+        .pd-av {
+          width: 38px;
+          height: 38px;
+          border-radius: 50%;
+          flex-shrink: 0;
+          background: linear-gradient(135deg, var(--accent), var(--rose));
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-family: "Syne", sans-serif;
+          font-size: 14px;
+          font-weight: 700;
+          color: white;
+        }
+
+        .pd-name { font-size: 13px; font-weight: 600; color: var(--text); }
+        .pd-email { font-size: 10px; color: var(--text3); }
+        .pd-plan {
+          display: inline-block;
+          margin-top: 3px;
+          font-size: 9px;
+          font-weight: 700;
+          padding: 2px 7px;
+          border-radius: 6px;
+          background: rgba(192, 120, 80, 0.1);
+          color: var(--accent);
+          font-family: "Syne", sans-serif;
+          letter-spacing: 0.06em;
+        }
+
+        .pd-section { padding: 8px; }
+
+        .pd-item {
+          width: 100%;
+          border: none;
+          background: transparent;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 8px 10px;
+          border-radius: 9px;
+          cursor: pointer;
+          transition: background 0.12s;
+          font-size: 12px;
+          font-weight: 500;
+          color: var(--text2);
+          text-align: left;
+        }
+
+        .pd-item:hover { background: var(--bg2); color: var(--text); }
+        .pd-item-icon {
+          width: 28px;
+          height: 28px;
+          border-radius: 8px;
+          background: var(--bg2);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 13px;
+          flex-shrink: 0;
+        }
+
+        .pd-divider { height: 1px; background: var(--border); margin: 2px 0; }
+        .pd-item.danger { color: var(--rose); }
+
+        .content { flex: 1; overflow-y: auto; padding: 22px 26px; }
+        .content::-webkit-scrollbar { width: 4px; }
+        .content::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+
+        .info-line { font-size: 12px; color: var(--text3); margin-bottom: 8px; }
+        .error-line { font-size: 12px; color: #c0392b; margin-bottom: 8px; }
+
+        .view-panel { display: none; }
+        .view-panel.active { display: block; animation: fadeUp 0.3s both; }
+
+        .stats-row { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+
+        .stat-card {
+          flex: 1;
+          min-width: 180px;
+          background: var(--surface);
+          border: 1px solid var(--border2);
+          border-radius: var(--r);
+          padding: 14px 16px;
+          position: relative;
+          overflow: hidden;
+        }
+
+        .stat-accent { position: absolute; top: 0; left: 0; right: 0; height: 2.5px; }
+        .stat-label {
+          font-size: 9px;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+          color: var(--text3);
+          font-family: "Syne", sans-serif;
+          font-weight: 600;
+          margin-top: 3px;
+        }
+
+        .stat-value {
+          font-family: "Playfair Display", serif;
+          font-size: 26px;
+          font-weight: 700;
+          color: var(--text);
+          margin: 4px 0 2px;
+          line-height: 1;
+        }
+
+        .stat-sub { font-size: 10px; color: var(--text3); }
+        .stat-glyph {
+          position: absolute;
+          right: 14px;
+          top: 50%;
+          transform: translateY(-50%);
+          font-size: 26px;
+          opacity: 0.08;
+        }
+
+        .section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+        .section-title {
+          font-family: "Syne", sans-serif;
+          font-weight: 700;
+          font-size: 12px;
+          color: var(--text);
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+        }
+
+        .section-count {
+          font-size: 9px;
+          color: var(--text3);
+          background: var(--bg2);
+          border: 1px solid var(--border2);
+          border-radius: 10px;
+          padding: 2px 8px;
+          font-weight: 600;
+          font-family: "Syne", sans-serif;
+        }
+
+        .section-action { margin-left: auto; font-size: 11px; color: var(--blue); cursor: pointer; }
+
+        .filter-row { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+
+        .chip {
+          padding: 5px 14px;
+          border-radius: 20px;
+          font-size: 11px;
+          font-weight: 600;
+          font-family: "Syne", sans-serif;
+          letter-spacing: 0.06em;
+          cursor: pointer;
+          border: 1px solid var(--border2);
+          background: var(--surface);
+          color: var(--text3);
+          transition: all 0.15s;
+          text-transform: uppercase;
+        }
+
+        .chip.active { background: var(--text); color: var(--surface2); border-color: var(--text); }
+
+        .ws-frame {
+          border: 2px solid var(--frame);
+          border-radius: var(--r-lg);
+          padding: 20px;
+          background: rgba(255, 255, 255, 0.4);
+          margin-bottom: 26px;
+          position: relative;
+          overflow: hidden;
+        }
+
+        .ws-frame::after {
+          content: "";
+          position: absolute;
+          inset: -2px;
+          border-radius: var(--r-lg);
+          background: conic-gradient(
+            from var(--angle, 0deg),
+            transparent 60%,
+            rgba(107, 163, 190, 0.4) 75%,
+            transparent 90%
+          );
+          animation: frameSpin 8s linear infinite;
+          mask: linear-gradient(white, white) content-box, linear-gradient(white, white);
+          mask-composite: xor;
+          padding: 2px;
+          pointer-events: none;
+        }
+
+        @property --angle {
+          syntax: "<angle>";
+          inherits: false;
+          initial-value: 0deg;
+        }
+
+        .workspace-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+
+        .ws-card {
+          border-radius: 20px;
+          overflow: hidden;
+          cursor: pointer;
+          transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s;
+          position: relative;
+          aspect-ratio: 4 / 3;
+          box-shadow: var(--shadow-card);
+          border: none;
+          padding: 0;
+          background: transparent;
+          text-align: left;
+        }
+
+        .ws-card:hover { transform: translateY(-5px) scale(1.014); box-shadow: 0 14px 52px rgba(44, 38, 28, 0.17); }
+        .ws-card.pending { cursor: progress; }
+        .ws-card.pending .ws-overlay { background: linear-gradient(180deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.62) 100%); }
+        .ws-bg { position: absolute; inset: 0; background-size: cover; background-position: center; transition: transform 0.4s ease; }
+        .ws-card:hover .ws-bg { transform: scale(1.05); }
+
+        .ws-overlay {
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(180deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.46) 50%, rgba(255, 255, 255, 0.58) 100%);
+          backdrop-filter: blur(1px);
+        }
+
+        .ws-label-wrap { position: absolute; top: 0; left: 0; right: 0; padding: 14px 14px 10px; }
+
+        .ws-label {
+          display: inline-block;
+          background: rgba(255, 255, 255, 0.72);
+          backdrop-filter: blur(8px);
+          border: 1px solid rgba(255, 255, 255, 0.88);
+          padding: 5px 14px;
+          border-radius: 11px;
+          font-family: "Syne", sans-serif;
+          font-weight: 700;
+          font-size: 12px;
+          letter-spacing: 0.1em;
+          color: var(--text);
+          text-transform: uppercase;
+          box-shadow: 0 2px 10px rgba(44, 38, 28, 0.06);
+        }
+
+        .ws-accent-strip { position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+
+        .ws-info {
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          padding: 10px 14px;
+          background: linear-gradient(0deg, rgba(255, 255, 255, 0.88) 0%, transparent 100%);
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
+        }
+
+        .ws-meta-txt { font-size: 10px; color: var(--text3); font-weight: 500; }
+        .ws-tags { display: flex; gap: 5px; }
+
+        .wt {
+          font-size: 8.5px;
+          letter-spacing: 0.07em;
+          text-transform: uppercase;
+          padding: 2px 7px;
+          border-radius: 7px;
+          font-weight: 700;
+          font-family: "Syne", sans-serif;
+        }
+
+        .wt.ta { background: rgba(90, 138, 106, 0.14); color: var(--green); border: 1px solid rgba(90, 138, 106, 0.22); }
+        .wt.tb { background: rgba(90, 122, 154, 0.12); color: var(--blue); border: 1px solid rgba(90, 122, 154, 0.18); }
+        .wt.tc { background: rgba(160, 104, 120, 0.12); color: var(--rose); border: 1px solid rgba(160, 104, 120, 0.18); }
+
+        .ws-add {
+          border-radius: 20px;
+          cursor: pointer;
+          aspect-ratio: 4 / 3;
+          border: 2px dashed rgba(44, 38, 28, 0.14);
+          background: rgba(255, 255, 255, 0.5);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          transition: all 0.25s;
+        }
+
+        .ws-add:hover { border-color: var(--frame); background: rgba(107, 163, 190, 0.07); transform: translateY(-4px); }
+        .ws-add-icon {
+          width: 44px;
+          height: 44px;
+          border-radius: 50%;
+          border: 2px dashed rgba(44, 38, 28, 0.18);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 22px;
+          color: var(--text3);
+        }
+
+        .ws-add-txt {
+          font-family: "Syne", sans-serif;
+          font-size: 11px;
+          font-weight: 700;
+          color: var(--text3);
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+        }
+
+        .tmpl-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 28px; }
+
+        .tmpl-card {
+          background: var(--surface);
+          border: 1px solid var(--border2);
+          border-radius: var(--r);
+          overflow: hidden;
+          cursor: pointer;
+          transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .tmpl-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
+
+        .tmpl-preview {
+          height: 130px;
+          position: relative;
+          overflow: hidden;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .tmpl-preview-inner { width: 78%; display: flex; flex-direction: column; gap: 7px; }
+        .tmpl-row {
+          height: 9px;
+          border-radius: 6px;
+          background: rgba(44, 38, 28, 0.1);
+          animation: shimmerLoad 1.8s ease-in-out infinite;
+        }
+
+        .tmpl-body { padding: 14px 16px; }
+        .tmpl-icon-wrap {
+          width: 36px;
+          height: 36px;
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 18px;
+          margin-bottom: 10px;
+        }
+
+        .tmpl-name { font-family: "Syne", sans-serif; font-weight: 700; font-size: 13px; color: var(--text); margin-bottom: 4px; }
+        .tmpl-desc { font-size: 11px; color: var(--text3); line-height: 1.55; margin-bottom: 14px; }
+
+        .tmpl-footer { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border); padding-top: 12px; gap: 10px; }
+        .tmpl-meta { font-size: 10px; color: var(--text3); }
+
+        .tmpl-use-btn {
+          padding: 6px 14px;
+          border-radius: 20px;
+          border: none;
+          font-family: "Syne", sans-serif;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          cursor: pointer;
+          text-transform: uppercase;
+          white-space: nowrap;
+        }
+
+        .device-panel { background: var(--surface); border: 1px solid var(--border2); border-radius: var(--r); overflow: hidden; margin-bottom: 28px; }
+        .device-panel-header {
+          padding: 14px 18px;
+          border-bottom: 1px solid var(--border);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+
+        .device-panel-title { font-family: "Syne", sans-serif; font-weight: 700; font-size: 12px; color: var(--text); letter-spacing: 0.06em; text-transform: uppercase; }
+        .sync-status { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--green); font-weight: 500; }
+        .sync-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 2s ease-in-out infinite; }
+        .device-list { padding: 8px; }
+
+        .device-item {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 10px 12px;
+          border-radius: 10px;
+          transition: background 0.15s;
+        }
+
+        .device-item:hover { background: var(--bg2); }
+
+        .device-item-icon {
+          width: 36px;
+          height: 36px;
+          border-radius: 10px;
+          background: var(--bg2);
+          border: 1px solid var(--border2);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 18px;
+          flex-shrink: 0;
+          position: relative;
+        }
+
+        .device-active-dot {
+          position: absolute;
+          top: 3px;
+          right: 3px;
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          border: 1.5px solid var(--surface);
+        }
+
+        .di-name { font-size: 12px; font-weight: 600; color: var(--text); }
+        .di-detail { font-size: 10px; color: var(--text3); margin-top: 1px; }
+
+        .di-badge {
+          margin-left: auto;
+          font-size: 9px;
+          font-weight: 700;
+          padding: 3px 8px;
+          border-radius: 8px;
+          font-family: "Syne", sans-serif;
+          letter-spacing: 0.06em;
+          flex-shrink: 0;
+        }
+
+        .di-badge.current { background: rgba(107, 163, 190, 0.12); color: var(--blue); }
+        .di-badge.synced { background: rgba(90, 138, 106, 0.12); color: var(--green); }
+        .di-badge.offline { background: rgba(44, 38, 28, 0.07); color: var(--text3); }
+
+        .di-sync-bar { width: 100%; height: 2px; background: var(--bg2); border-radius: 2px; margin-top: 6px; overflow: hidden; }
+        .di-sync-fill { height: 100%; background: linear-gradient(90deg, var(--green), var(--frame)); border-radius: 2px; animation: syncPulse 2s ease-in-out infinite; }
+
+        .two-col { display: grid; grid-template-columns: 1fr 290px; gap: 16px; }
+
+        .activity-list { background: var(--surface); border: 1px solid var(--border2); border-radius: var(--r); overflow: hidden; }
+        .activity-item {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 10px 16px;
+          border-bottom: 1px solid var(--border);
+        }
+
+        .activity-item:last-child { border-bottom: none; }
+        .activity-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+        .activity-info { flex: 1; }
+        .activity-action { font-size: 12px; font-weight: 500; color: var(--text); }
+        .activity-detail { font-size: 10px; color: var(--text3); margin-top: 1px; }
+        .activity-time { font-size: 10px; color: var(--text3); flex-shrink: 0; }
+
+        .quick-panel { background: var(--surface); border: 1px solid var(--border2); border-radius: var(--r); overflow: hidden; display: flex; flex-direction: column; }
+        .quick-header { padding: 13px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+        .quick-title { font-family: "Syne", sans-serif; font-weight: 700; font-size: 12px; color: var(--text); letter-spacing: 0.06em; text-transform: uppercase; }
+
+        .quick-add-btn {
+          width: 24px;
+          height: 24px;
+          border-radius: 7px;
+          border: 1px solid var(--border2);
+          background: none;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 16px;
+          color: var(--text3);
+        }
+
+        .quick-notes { flex: 1; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+
+        .quick-note {
+          border-radius: 9px;
+          padding: 9px 11px;
+          font-size: 12px;
+          line-height: 1.5;
+          color: var(--text);
+          border-left: 3px solid var(--nc);
+          background: var(--nb);
+        }
+
+        .qn-title {
+          font-weight: 600;
+          font-size: 10px;
+          margin-bottom: 2px;
+          color: var(--nc);
+          font-family: "Syne", sans-serif;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+        }
+
+        .overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(44, 38, 28, 0.4);
+          backdrop-filter: blur(6px);
+          z-index: 100;
+          display: none;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .overlay.show { display: flex; }
+
+        .modal {
+          background: var(--surface);
+          border: 1px solid var(--border2);
+          border-radius: 24px;
+          padding: 30px;
+          width: min(440px, 92vw);
+          box-shadow: var(--shadow-lg);
+        }
+
+        .modal-title {
+          font-family: "Playfair Display", serif;
+          font-size: 21px;
+          font-weight: 700;
+          color: var(--text);
+          margin-bottom: 6px;
+        }
+
+        .modal-sub { font-size: 13px; color: var(--text3); margin-bottom: 22px; }
+        .modal-label {
+          font-size: 9.5px;
+          font-weight: 700;
+          letter-spacing: 0.14em;
+          color: var(--text2);
+          margin-bottom: 6px;
+          font-family: "Syne", sans-serif;
+          text-transform: uppercase;
+        }
+
+        .modal-input {
+          width: 100%;
+          height: 42px;
+          border-radius: 50px;
+          background: var(--bg2);
+          border: 1.5px solid var(--border2);
+          padding: 0 18px;
+          font-family: "DM Sans", sans-serif;
+          font-size: 13px;
+          color: var(--text);
+          outline: none;
+          margin-bottom: 16px;
+        }
+
+        .color-row { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+
+        .color-swatch {
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          cursor: pointer;
+          border: 2.5px solid transparent;
+          transition: all 0.15s;
+        }
+
+        .color-swatch.sel { border-color: var(--text); transform: scale(1.12); }
+        .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+        .btn-cancel {
+          padding: 9px 20px;
+          border-radius: 50px;
+          border: 1px solid var(--border2);
+          background: none;
+          font-family: "Syne", sans-serif;
+          font-size: 11px;
+          font-weight: 700;
+          color: var(--text2);
+          cursor: pointer;
+          letter-spacing: 0.06em;
+        }
+
+        .btn-confirm {
+          padding: 9px 24px;
+          border-radius: 50px;
+          border: none;
+          background: var(--text);
+          color: var(--surface2);
+          font-family: "Syne", sans-serif;
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          cursor: pointer;
+        }
+
+        .btn-confirm:disabled { opacity: 0.7; cursor: wait; }
+
+        .toast {
+          position: fixed;
+          bottom: 22px;
+          right: 22px;
+          background: var(--text);
+          color: var(--surface2);
+          padding: 11px 18px;
+          border-radius: 11px;
+          font-size: 12px;
+          font-weight: 500;
+          box-shadow: var(--shadow-lg);
+          z-index: 200;
+          opacity: 0;
+          pointer-events: none;
+          transform: translateY(8px);
+          transition: opacity 0.25s, transform 0.25s;
+        }
+
+        .toast.show { opacity: 1; pointer-events: auto; transform: none; }
+
+        .sb-backdrop {
+          display: none;
+          position: fixed;
+          inset: 0;
+          background: rgba(44, 38, 28, 0.3);
+          backdrop-filter: blur(3px);
+          z-index: 45;
+        }
+
+        .sb-backdrop.visible { display: block; }
+
+        @media (max-width: 1100px) {
+          .workspace-grid, .tmpl-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        @media (max-width: 900px) {
+          .two-col { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 768px) {
+          .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            z-index: 50;
+            transform: translateX(-100%);
+            width: var(--sb) !important;
+            box-shadow: var(--shadow-lg);
+          }
+
+          .sidebar.mobile-open { transform: translateX(0); }
+          .mobile-ham { display: flex; }
+          .devices-row { display: none; }
+          .topbar { padding: 0 14px; }
+          .new-btn span:last-child { display: none; }
+          .content { padding: 16px; }
+          .workspace-grid, .tmpl-grid { grid-template-columns: 1fr; }
+        }
+
+        @keyframes orbDrift {
+          0% { transform: translate(0, 0) scale(1); }
+          25% { transform: translate(40px, -30px) scale(1.05); }
+          50% { transform: translate(-20px, 50px) scale(0.95); }
+          75% { transform: translate(30px, 20px) scale(1.08); }
+          100% { transform: translate(0, 0) scale(1); }
+        }
+
+        @keyframes particleFloat {
+          0% { opacity: 0; transform: translateY(0) scale(0); }
+          10% { opacity: 0.35; }
+          90% { opacity: 0.1; }
+          100% { opacity: 0; transform: translateY(-120px) scale(1.5); }
+        }
+
+        @keyframes waveBar {
+          0%, 100% { transform: scaleY(0.5); opacity: 0.5; }
+          50% { transform: scaleY(1); opacity: 1; }
+        }
+
+        @keyframes pulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(90, 138, 106, 0.5); }
+          50% { box-shadow: 0 0 0 4px rgba(90, 138, 106, 0); }
+        }
+
+        @keyframes ringPulse {
+          0%, 100% { transform: scale(1); opacity: 0.6; }
+          50% { transform: scale(1.08); opacity: 1; }
+        }
+
+        @keyframes shimmerLoad {
+          0%, 100% { opacity: 0.5; }
+          50% { opacity: 1; }
+        }
+
+        @keyframes frameSpin {
+          to { --angle: 360deg; }
+        }
+
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(12px); }
+          to { opacity: 1; transform: none; }
+        }
+
+        @keyframes syncPulse {
+          0%, 100% { opacity: 0.6; }
+          50% { opacity: 1; }
+        }
+      `}</style>
+    </>
+  );
+}

@@ -3,23 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import DashboardClient from "@/components/dashboard-client";
-
-function resolveUserName(user: { name?: string | null; email?: string | null } | undefined) {
-  const fullName = user?.name?.trim() ?? "";
-
-  if (fullName) {
-    return fullName;
-  }
-
-  const email = user?.email;
-
-  if (email) {
-    return email.split("@")[0] || "User";
-  }
-
-  return "User";
-}
+import DashboardPolished from "@/components/dashboard-polished";
 
 export default function DashboardPageShell() {
   const router = useRouter();
@@ -30,18 +14,18 @@ export default function DashboardPageShell() {
       return;
     }
 
-    if (!session) {
+    if (!session?.user?.email) {
       router.replace("/auth/sign-in");
     }
   }, [router, session, status]);
 
-  if (status === "loading" || !session) {
+  if (status === "loading" || !session?.user?.email) {
     return (
-      <div className="min-h-screen bg-[linear-gradient(180deg,#ebe6de_0%,#e3cdc0_100%)] px-6 py-10 text-[#64666b]">
-        Loading dashboard...
+      <div className="min-h-screen bg-[linear-gradient(180deg,#e8e2d9_0%,#dfd5c8_100%)] px-6 py-10 text-[#5c5752]">
+        Loading workspace...
       </div>
     );
   }
 
-  return <DashboardClient userName={resolveUserName(session.user)} />;
+  return <DashboardPolished />;
 }
