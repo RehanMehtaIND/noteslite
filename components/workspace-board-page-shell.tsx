@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 
-import WorkspaceBoardClient from "@/components/workspace-board-client";
+import NotesliteWorkspace from "@/components/noteslite-workspace/NotesliteWorkspace";
 
 export default function WorkspaceBoardPageShell({
   workspaceId,
@@ -39,5 +39,5 @@ export default function WorkspaceBoardPageShell({
     );
   }
 
-  return <WorkspaceBoardClient workspaceId={workspaceId} />;
+  return <NotesliteWorkspace />;
 }
