@@ -195,16 +195,64 @@ export default function DashboardPolished() {
   });
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+  const [isPasswordLoading, setIsPasswordLoading] = useState(false);
+
+  const [emailVerifyStep, setEmailVerifyStep] = useState<"idle" | "otp">("idle");
+  const [emailOtpForm, setEmailOtpForm] = useState("");
+  const [isEmailVerifying, setIsEmailVerifying] = useState(false);
+  const [emailVerifyError, setEmailVerifyError] = useState<string | null>(null);
+
+  const [isUpdating2FA, setIsUpdating2FA] = useState(false);
 
   useEffect(() => {
     if (session?.user?.email) {
-      setProfileSettings((prev) => ({ ...prev, email: session.user.email as string }));
+      setProfileSettings((prev) => ({ 
+        ...prev, 
+        email: session.user.email as string,
+        emailVerified: !!session.user.emailVerified,
+      }));
     }
-  }, [session?.user?.email]);
+  }, [session?.user]);
 
-  function handleUpdateProfile(updates: Partial<ProfileSettings>) {
-    setProfileSettings((prev) => ({ ...prev, ...updates }));
-    setToast("Profile setting updated");
+  async function handleUpdateProfile(updates: Partial<ProfileSettings>) {
+    if ("twoFactorEnabled" in updates || "twoFactorMethod" in updates) {
+      setIsUpdating2FA(true);
+      try {
+        const response = await fetch("/api/auth/2fa", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            enabled: updates.twoFactorEnabled ?? profileSettings.twoFactorEnabled,
+            method: updates.twoFactorMethod ?? profileSettings.twoFactorMethod,
+          }),
+        });
+
+        if (!response.ok) {
+          let errMsg = "Failed to update 2FA settings";
+          try {
+            const errData = await response.json();
+            if (errData.error) errMsg = errData.error;
+          } catch (e) {}
+          throw new Error(errMsg);
+        }
+
+        const data = await response.json();
+        setProfileSettings((prev) => ({ 
+          ...prev, 
+          twoFactorEnabled: data.twoFactorEnabled,
+          twoFactorMethod: data.twoFactorMethod
+        }));
+        setToast("2FA settings updated");
+      } catch (error) {
+        setToast("Failed to update 2FA");
+        console.error(error);
+      } finally {
+        setIsUpdating2FA(false);
+      }
+    } else {
+      setProfileSettings((prev) => ({ ...prev, ...updates }));
+      setToast("Profile setting updated");
+    }
   }
 
   function handleUpdatePassword(field: keyof PasswordForm, value: string) {
@@ -213,7 +261,7 @@ export default function DashboardPolished() {
     setPasswordSuccess(null);
   }
 
-  function handleSavePassword() {
+  async function handleSavePassword() {
     if (!passwordForm.currentPassword) {
       setPasswordError("Current password is required");
       return;
@@ -227,10 +275,96 @@ export default function DashboardPolished() {
       return;
     }
     
+    setIsPasswordLoading(true);
     setPasswordError(null);
-    setPasswordSuccess("Password updated successfully");
-    setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
-    setToast("Password updated");
+    setPasswordSuccess(null);
+
+    try {
+      const response = await fetch("/api/auth/password", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to change password");
+      }
+
+      setPasswordSuccess("Password updated successfully");
+      setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      setToast("Password updated");
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        setPasswordError(error.message);
+      } else {
+        setPasswordError("An unexpected error occurred");
+      }
+    } finally {
+      setIsPasswordLoading(false);
+    }
+  }
+
+  async function handleSendEmailOtp() {
+    setIsEmailVerifying(true);
+    setEmailVerifyError(null);
+    try {
+      const response = await fetch("/api/auth/verify-email", { method: "POST" });
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to send OTP");
+      }
+      
+      setEmailVerifyStep("otp");
+      setToast("Verification code sent to your email");
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        setToast(error.message);
+      } else {
+        setToast("Failed to send OTP");
+      }
+    } finally {
+      setIsEmailVerifying(false);
+    }
+  }
+
+  async function handleConfirmEmailOtp() {
+    if (emailOtpForm.length !== 6) return;
+    
+    setIsEmailVerifying(true);
+    setEmailVerifyError(null);
+    
+    try {
+      const response = await fetch("/api/auth/verify-email/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ otp: emailOtpForm }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to verify email");
+      }
+      
+      setProfileSettings((prev) => ({ ...prev, emailVerified: true }));
+      setEmailVerifyStep("idle");
+      setEmailOtpForm("");
+      setToast("Email verified successfully!");
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        setEmailVerifyError(error.message);
+      } else {
+        setEmailVerifyError("Invalid verification code");
+      }
+    } finally {
+      setIsEmailVerifying(false);
+    }
   }
 
   const profileWrapRef = useRef<HTMLDivElement | null>(null);
@@ -349,11 +483,11 @@ export default function DashboardPolished() {
 
       if (isTyping) return;
 
-      if (event.key.toLowerCase() === "n") {
+      if (event.key?.toLowerCase() === "n") {
         setCreateOpen(true);
       }
 
-      if (event.key.toLowerCase() === "b") {
+      if (event.key?.toLowerCase() === "b") {
         setSidebarCollapsed((current) => !current);
       }
     }
@@ -717,7 +851,13 @@ export default function DashboardPolished() {
               <div className="search-bar">
                 <span className="search-icon">⌕</span>
                 <input
-                  type="text"
+                  type="search"
+                  name="q"
+                  id="search-input"
+                  autoComplete="nope"
+                  spellCheck="false"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
                   placeholder="Search workspaces..."
                   value={searchValue}
                   onChange={(event) => setSearchValue(event.target.value)}
@@ -2344,6 +2484,15 @@ export default function DashboardPolished() {
         onUpdateProfile={handleUpdateProfile}
         onUpdatePassword={handleUpdatePassword}
         onSavePassword={handleSavePassword}
+        isPasswordLoading={isPasswordLoading}
+        emailVerifyStep={emailVerifyStep}
+        emailOtpForm={emailOtpForm}
+        isEmailVerifying={isEmailVerifying}
+        emailVerifyError={emailVerifyError}
+        onUpdateEmailOtp={setEmailOtpForm}
+        onSendEmailOtp={handleSendEmailOtp}
+        onConfirmEmailOtp={handleConfirmEmailOtp}
+        isUpdating2FA={isUpdating2FA}
       />
     </>
   );

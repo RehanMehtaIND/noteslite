@@ -33,6 +33,18 @@ type ProfileModalProps = {
   onUpdateProfile: (updates: Partial<ProfileSettings>) => void;
   onUpdatePassword: (field: keyof PasswordForm, value: string) => void;
   onSavePassword: () => void;
+  
+  isPasswordLoading?: boolean;
+  
+  emailVerifyStep?: "idle" | "otp";
+  emailOtpForm?: string;
+  isEmailVerifying?: boolean;
+  emailVerifyError?: string | null;
+  onUpdateEmailOtp?: (val: string) => void;
+  onSendEmailOtp?: () => void;
+  onConfirmEmailOtp?: () => void;
+  
+  isUpdating2FA?: boolean;
 };
 
 const TIMEZONE_OPTIONS = [
@@ -89,10 +101,12 @@ function maskEmail(email: string) {
 function Toggle({
   checked,
   label,
+  disabled,
   onChange,
 }: {
   checked: boolean;
   label: string;
+  disabled?: boolean;
   onChange: (checked: boolean) => void;
 }) {
   return (
@@ -101,8 +115,9 @@ function Toggle({
       role="switch"
       aria-checked={checked}
       aria-label={label}
+      disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`inline-flex h-8 min-w-[66px] items-center rounded-full border px-1 transition-[background-color,border-color,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dashboard-modal-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[rgba(244,245,248,0.98)] ${
+      className={`inline-flex h-8 min-w-[66px] items-center rounded-full border px-1 transition-[background-color,border-color,box-shadow,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dashboard-modal-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[rgba(244,245,248,0.98)] disabled:opacity-50 disabled:cursor-not-allowed ${
         checked
           ? "justify-end border-[rgba(111,142,163,0.48)] bg-[rgba(111,142,163,0.18)]"
           : "justify-start border-[rgba(191,194,202,0.92)] bg-[rgba(255,255,255,0.84)]"
@@ -159,6 +174,15 @@ export default function ProfileModal({
   onUpdateProfile,
   onUpdatePassword,
   onSavePassword,
+  isPasswordLoading = false,
+  emailVerifyStep = "idle",
+  emailOtpForm = "",
+  isEmailVerifying = false,
+  emailVerifyError = null,
+  onUpdateEmailOtp,
+  onSendEmailOtp,
+  onConfirmEmailOtp,
+  isUpdating2FA = false,
 }: ProfileModalProps) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -361,27 +385,62 @@ export default function ProfileModal({
                   title="Email verification and visibility"
                   description="Control how your email appears in the dashboard and verify it locally for this mock flow."
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8a8f98]">
-                        Current email
-                      </p>
-                      <p className="mt-2 text-[15px] font-medium text-[#5f6269]">
-                        {displayedEmail}
-                      </p>
-                      <p className="mt-1 text-[12px] text-[#7a7e87]">
-                        {profile.emailVerified ? "Status: verified" : "Status: not verified"}
-                      </p>
-                    </div>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8a8f98]">
+                          Current email
+                        </p>
+                        <p className="mt-2 text-[15px] font-medium text-[#5f6269]">
+                          {displayedEmail}
+                        </p>
+                        <p className="mt-1 text-[12px] text-[#7a7e87]">
+                          {profile.emailVerified ? "Status: verified" : "Status: not verified"}
+                        </p>
+                      </div>
 
-                    <button
-                      type="button"
-                      onClick={() => onUpdateProfile({ emailVerified: true })}
-                      disabled={profile.emailVerified}
-                      className="inline-flex h-9 items-center justify-center rounded-full border border-[rgba(191,194,202,0.92)] bg-[rgba(255,255,255,0.84)] px-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#62666e] transition-colors duration-200 hover:bg-[rgba(246,247,250,0.98)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dashboard-modal-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[rgba(244,245,248,0.98)] disabled:cursor-default disabled:border-[rgba(111,142,163,0.38)] disabled:bg-[rgba(111,142,163,0.16)] disabled:text-[#617b8c]"
-                    >
-                      {profile.emailVerified ? "Verified" : "Verify"}
-                    </button>
+                      {emailVerifyStep === "idle" && (
+                        <button
+                          type="button"
+                          onClick={onSendEmailOtp}
+                          disabled={profile.emailVerified || isEmailVerifying}
+                          className="inline-flex h-9 items-center justify-center rounded-full border border-[rgba(191,194,202,0.92)] bg-[rgba(255,255,255,0.84)] px-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#62666e] transition-colors duration-200 hover:bg-[rgba(246,247,250,0.98)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dashboard-modal-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[rgba(244,245,248,0.98)] disabled:cursor-default disabled:border-[rgba(111,142,163,0.38)] disabled:bg-[rgba(111,142,163,0.16)] disabled:text-[#617b8c]"
+                        >
+                          {profile.emailVerified ? "Verified" : isEmailVerifying ? "Sending..." : "Verify"}
+                        </button>
+                      )}
+                    </div>
+                    
+                    {emailVerifyStep === "otp" && (
+                      <div className="mt-2 rounded-[12px] border border-blue-200 bg-blue-50/50 p-4">
+                        <p className="mb-3 text-[12px] text-blue-800">
+                          We sent a 6-digit code to your email. Enter it below to verify.
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            maxLength={6}
+                            placeholder="123456"
+                            value={emailOtpForm}
+                            onChange={(e) => onUpdateEmailOtp?.(e.target.value)}
+                            className="h-9 w-32 rounded-[8px] border border-blue-200 bg-white px-3 text-[13px] tracking-widest text-[#5f6269] outline-none transition-colors duration-200 focus:border-blue-400 focus-visible:ring-2 focus-visible:ring-blue-400/20"
+                          />
+                          <button
+                            type="button"
+                            onClick={onConfirmEmailOtp}
+                            disabled={emailOtpForm.length !== 6 || isEmailVerifying}
+                            className="inline-flex h-9 items-center justify-center rounded-[8px] bg-blue-600 px-4 text-[12px] font-medium text-white transition-colors duration-200 hover:bg-blue-700 disabled:opacity-50"
+                          >
+                            {isEmailVerifying ? "Confirming..." : "Confirm"}
+                          </button>
+                        </div>
+                        {emailVerifyError && (
+                          <p className="mt-2 text-[12px] font-medium text-red-500">
+                            {emailVerifyError}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="mt-4 flex items-center justify-between gap-3 rounded-[18px] border border-[rgba(211,213,221,0.82)] bg-[rgba(246,247,250,0.74)] px-4 py-3">
@@ -500,6 +559,8 @@ export default function ProfileModal({
                       </span>
                       <input
                         type="password"
+                        name="current-pw-no-autofill"
+                        autoComplete="new-password"
                         value={passwordForm.currentPassword}
                         onChange={(event) => onUpdatePassword("currentPassword", event.target.value)}
                         className="h-11 rounded-[16px] border border-[rgba(211,213,221,0.92)] bg-[rgba(255,255,255,0.88)] px-4 text-[13px] text-[#5f6269] outline-none transition-colors duration-200 focus:border-[rgba(118,123,134,0.54)] focus-visible:ring-2 focus-visible:ring-[var(--dashboard-modal-ring)]"
@@ -511,6 +572,8 @@ export default function ProfileModal({
                       </span>
                       <input
                         type="password"
+                        name="new-pw-no-autofill"
+                        autoComplete="new-password"
                         value={passwordForm.newPassword}
                         onChange={(event) => onUpdatePassword("newPassword", event.target.value)}
                         className="h-11 rounded-[16px] border border-[rgba(211,213,221,0.92)] bg-[rgba(255,255,255,0.88)] px-4 text-[13px] text-[#5f6269] outline-none transition-colors duration-200 focus:border-[rgba(118,123,134,0.54)] focus-visible:ring-2 focus-visible:ring-[var(--dashboard-modal-ring)]"
@@ -522,6 +585,8 @@ export default function ProfileModal({
                       </span>
                       <input
                         type="password"
+                        name="confirm-pw-no-autofill"
+                        autoComplete="new-password"
                         value={passwordForm.confirmPassword}
                         onChange={(event) => onUpdatePassword("confirmPassword", event.target.value)}
                         className="h-11 rounded-[16px] border border-[rgba(211,213,221,0.92)] bg-[rgba(255,255,255,0.88)] px-4 text-[13px] text-[#5f6269] outline-none transition-colors duration-200 focus:border-[rgba(118,123,134,0.54)] focus-visible:ring-2 focus-visible:ring-[var(--dashboard-modal-ring)]"
@@ -540,9 +605,10 @@ export default function ProfileModal({
                     <button
                       type="button"
                       onClick={onSavePassword}
-                      className="inline-flex h-10 items-center justify-center rounded-full border border-[rgba(111,142,163,0.34)] bg-[rgba(111,142,163,0.14)] px-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5e7588] transition-colors duration-200 hover:bg-[rgba(111,142,163,0.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dashboard-modal-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[rgba(244,245,248,0.98)]"
+                      disabled={isPasswordLoading || !passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword || passwordForm.newPassword !== passwordForm.confirmPassword}
+                      className="inline-flex h-10 items-center justify-center rounded-full border border-[rgba(111,142,163,0.34)] bg-[rgba(111,142,163,0.14)] px-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5e7588] transition-colors duration-200 hover:bg-[rgba(111,142,163,0.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dashboard-modal-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[rgba(244,245,248,0.98)] disabled:opacity-50"
                     >
-                      Save password
+                      {isPasswordLoading ? "Saving..." : "Update password"}
                     </button>
                   </div>
                 </SectionCard>
@@ -564,6 +630,7 @@ export default function ProfileModal({
                     <Toggle
                       checked={profile.twoFactorEnabled}
                       label={profile.twoFactorEnabled ? "Disable two-factor authentication" : "Enable two-factor authentication"}
+                      disabled={isUpdating2FA}
                       onChange={(checked) => onUpdateProfile({ twoFactorEnabled: checked })}
                     />
                   </div>

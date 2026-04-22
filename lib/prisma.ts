@@ -4,6 +4,11 @@ const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
 };
 
+// Force delete the cached prisma client to pick up recent schema changes
+if (process.env.NODE_ENV !== "production") {
+  delete globalForPrisma.prisma;
+}
+
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
