@@ -91,8 +91,9 @@ export const authOptions: NextAuthOptions = {
         token.name = user.name;
       }
 
-      if ("googleId" in (user ?? {}) && typeof user?.googleId === "string") {
-        token.googleId = user.googleId;
+      const userWithGoogleId = user as { googleId?: unknown } | undefined;
+      if (typeof userWithGoogleId?.googleId === "string") {
+        token.googleId = userWithGoogleId.googleId;
       }
 
       const googleProfile = profile as
