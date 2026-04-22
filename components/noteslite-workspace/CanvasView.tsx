@@ -98,9 +98,11 @@ export default function CanvasView({ items, setItems, connections, triggerToast,
       const newWx = (evt.clientX - rect.left) / zoom - cam.x;
       const newWy = (evt.clientY - rect.top) / zoom - cam.y;
       
+      const activeDrag = dragRef.current;
+      
       setItems(prev => prev.map(i => {
-        if (i.id === dragRef.current!.id) {
-          return { ...i, x: newWx - dragRef.current!.ox, y: newWy - dragRef.current!.oy };
+        if (i.id === activeDrag.id) {
+          return { ...i, x: newWx - activeDrag.ox, y: newWy - activeDrag.oy };
         }
         return i;
       }));
