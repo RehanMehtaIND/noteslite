@@ -3,6 +3,9 @@ import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { z } from "zod";
+import { headers } from "next/headers";
+import { UAParser } from "ua-parser-js";
+import crypto from "crypto";
 
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/password";
@@ -78,43 +81,121 @@ export const authOptions: NextAuthOptions = {
   },
   providers,
   callbacks: {
-    async jwt({ token, profile, user }) {
-      if (user?.id) {
-        token.sub = user.id;
-      }
-
-      if (user?.email) {
-        token.email = user.email;
-      }
-
-      if (user?.name) {
-        token.name = user.name;
-      }
-
-      const userWithGoogleId = user as { googleId?: unknown } | undefined;
-      if (typeof userWithGoogleId?.googleId === "string") {
-        token.googleId = userWithGoogleId.googleId;
-      }
+    async jwt({ token, profile, user, account }) {
+      // Resolve the database user ID on sign-in.
+      // For credentials: user.id is already the DB UUID.
+      // For Google OAuth: user.id is the Google sub (not a UUID), so we must
+      // upsert the DB user first to get the correct UUID.
+      let dbUserId: string | null = null;
 
       const googleProfile = profile as
         | { sub?: string; email?: string; name?: string; picture?: string }
         | undefined;
 
-      if (googleProfile?.sub) {
-        token.sub = googleProfile.sub;
-        token.googleId = googleProfile.sub;
+      if (account?.provider === "google" && googleProfile?.sub && googleProfile?.email) {
+        // Google sign-in: resolve or create the DB user by googleId
+        try {
+          const displayName = googleProfile.name || googleProfile.email.split("@")[0] || "User";
+          const dbUser = await prisma.user.upsert({
+            where: { googleId: googleProfile.sub },
+            update: {
+              email: googleProfile.email,
+              name: displayName,
+            },
+            create: {
+              googleId: googleProfile.sub,
+              email: googleProfile.email,
+              name: displayName,
+            },
+            select: { id: true },
+          });
+
+          dbUserId = dbUser.id;
+          token.sub = dbUser.id;          // DB UUID, not Google sub
+          token.googleId = googleProfile.sub;
+          token.email = googleProfile.email;
+          token.name = googleProfile.name;
+          token.picture = googleProfile.picture;
+        } catch (error) {
+          console.error("Failed to upsert Google user:", error);
+        }
+      } else if (user?.id) {
+        // Credentials sign-in: user.id is the DB UUID
+        dbUserId = user.id;
+        token.sub = user.id;
+
+        if (user.email) {
+          token.email = user.email;
+        }
+
+        if (user.name) {
+          token.name = user.name;
+        }
+
+        const userWithGoogleId = user as { googleId?: unknown } | undefined;
+        if (typeof userWithGoogleId?.googleId === "string") {
+          token.googleId = userWithGoogleId.googleId;
+        }
       }
 
-      if (googleProfile?.email) {
-        token.email = googleProfile.email;
-      }
+      // Create or update device session for ANY sign-in method
+      if (dbUserId) {
+        try {
+          const reqHeaders = await headers();
+          const userAgent = reqHeaders.get("user-agent") || "";
+          const ip = reqHeaders.get("x-forwarded-for") || reqHeaders.get("x-real-ip") || null;
 
-      if (googleProfile?.name) {
-        token.name = googleProfile.name;
-      }
+          const parser = new UAParser(userAgent);
+          const device = parser.getDevice();
+          const os = parser.getOS();
+          const browser = parser.getBrowser();
 
-      if (googleProfile?.picture) {
-        token.picture = googleProfile.picture;
+          const deviceName = device.vendor && device.model 
+            ? `${device.vendor} ${device.model}` 
+            : `${os.name || "Unknown"} Device`;
+
+          const browserName = `${browser.name || "Unknown"} ${browser.version || ""}`.trim();
+          const osName = `${os.name || "Unknown"} ${os.version || ""}`.trim();
+
+          const existingSession = await prisma.session.findFirst({
+            where: {
+              userId: dbUserId,
+              deviceName,
+              browser: browserName,
+              os: osName,
+            }
+          });
+
+          const sessionToken = crypto.randomUUID();
+
+          if (existingSession) {
+            await prisma.session.update({
+              where: { id: existingSession.id },
+              data: {
+                sessionToken,
+                lastActiveAt: new Date(),
+                ipAddress: ip,
+                isActive: true,
+              }
+            });
+          } else {
+            await prisma.session.create({
+              data: {
+                userId: dbUserId,
+                deviceName,
+                browser: browserName,
+                os: osName,
+                ipAddress: ip,
+                sessionToken,
+                isActive: true,
+              }
+            });
+          }
+
+          token.sessionToken = sessionToken;
+        } catch (error) {
+          console.error("Failed to create tracking session:", error);
+        }
       }
 
       return token;
@@ -135,6 +216,10 @@ export const authOptions: NextAuthOptions = {
 
         if (token.picture) {
           session.user.image = token.picture;
+        }
+
+        if (token.sessionToken) {
+          (session as any).sessionToken = token.sessionToken;
         }
       }
 

@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { broadcast } from "@/lib/sse";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -67,6 +68,9 @@ export async function POST(req: Request, context: RouteContext) {
       },
       include: { tags: true },
     });
+
+    const clientId = req.headers.get("x-client-id") || undefined;
+    broadcast(workspaceId, "card:created", card, clientId);
 
     return NextResponse.json({ card }, { status: 201 });
   } catch (error) {

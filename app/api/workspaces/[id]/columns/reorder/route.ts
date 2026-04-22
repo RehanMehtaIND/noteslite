@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { broadcast } from "@/lib/sse";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -68,6 +69,9 @@ export async function PATCH(req: Request, context: RouteContext) {
       where: { workspaceId },
       orderBy: { orderIndex: "asc" },
     });
+
+    const clientId = req.headers.get("x-client-id");
+    broadcast(workspaceId, "columns:reordered", { columns: updatedColumns }, clientId || undefined);
 
     return NextResponse.json({ columns: updatedColumns });
   } catch (error) {
