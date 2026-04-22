@@ -1,30 +1,7 @@
-# Backend
+# Backend (Reserved)
 
-Minimal Node.js + Express backend starter.
+The primary API is handled by Next.js API routes in `/app/api`. 
 
-## Setup
+This folder is reserved for future standalone microservices.
 
-```bash
-npm install
-```
-
-## Run
-
-```bash
-npm run dev
-```
-
-or
-
-```bash
-npm start
-```
-
-The server listens on port `5000` by default. You can override it with `PORT`.
-
-## Environment Variables
-
-Copy `.env.example` to `.env` and update values:
-
-- `PORT`
-- `DATABASE_URL`
+Currently, this acts as an empty placeholder folder should the need arise for a decoupled service (e.g., heavy processing, websockets).

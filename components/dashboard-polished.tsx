@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
+import ProfileModal, { type ProfileSettings, type PasswordForm } from "./profile-modal";
 
 type WorkspaceItem = {
   id: string;
@@ -173,6 +174,64 @@ export default function DashboardPolished() {
 
   const [toast, setToast] = useState("");
   const [pendingWorkspaceIds, setPendingWorkspaceIds] = useState<Set<string>>(new Set());
+
+  // Profile modal state
+  const [profileModalVisible, setProfileModalVisible] = useState(false);
+  const [profileSettings, setProfileSettings] = useState<ProfileSettings>({
+    avatarMode: "placeholder",
+    avatarUrl: "",
+    email: "",
+    emailVerified: false,
+    showEmail: true,
+    timezone: "UTC",
+    emailNotifications: true,
+    twoFactorEnabled: false,
+    twoFactorMethod: "authenticator",
+  });
+  const [passwordForm, setPasswordForm] = useState<PasswordForm>({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (session?.user?.email) {
+      setProfileSettings((prev) => ({ ...prev, email: session.user.email as string }));
+    }
+  }, [session?.user?.email]);
+
+  function handleUpdateProfile(updates: Partial<ProfileSettings>) {
+    setProfileSettings((prev) => ({ ...prev, ...updates }));
+    setToast("Profile setting updated");
+  }
+
+  function handleUpdatePassword(field: keyof PasswordForm, value: string) {
+    setPasswordForm((prev) => ({ ...prev, [field]: value }));
+    setPasswordError(null);
+    setPasswordSuccess(null);
+  }
+
+  function handleSavePassword() {
+    if (!passwordForm.currentPassword) {
+      setPasswordError("Current password is required");
+      return;
+    }
+    if (passwordForm.newPassword.length < 8) {
+      setPasswordError("New password must be at least 8 characters");
+      return;
+    }
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordError("Passwords do not match");
+      return;
+    }
+    
+    setPasswordError(null);
+    setPasswordSuccess("Password updated successfully");
+    setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+    setToast("Password updated");
+  }
 
   const profileWrapRef = useRef<HTMLDivElement | null>(null);
   const hasRequestedEmailRef = useRef<string | null>(null);
@@ -429,6 +488,16 @@ export default function DashboardPolished() {
     }
   }
 
+  async function handleDeleteWorkspace(id: string) {
+    setWorkspaces((current) => current.filter((ws) => ws.id !== id));
+    setToast("Workspace removed");
+    try {
+      await fetch(`/api/workspaces/${id}`, { method: "DELETE" });
+    } catch {
+      setToast("Failed to remove workspace");
+    }
+  }
+
   function handleOpenWorkspace(workspace: WorkspaceItem) {
     if (pendingWorkspaceIds.has(workspace.id)) {
       setToast("Workspace is still being created...");
@@ -677,7 +746,7 @@ export default function DashboardPolished() {
                     </div>
                   </div>
                   <div className="pd-section">
-                    <button className="pd-item" type="button" onClick={() => { setToast("Opening profile..."); setProfileOpen(false); }}>
+                    <button className="pd-item" type="button" onClick={() => { setProfileModalVisible(true); setProfileOpen(false); }}>
                       <div className="pd-item-icon">👤</div>
                       Profile Settings
                     </button>
@@ -773,16 +842,33 @@ export default function DashboardPolished() {
                       const isPending = pendingWorkspaceIds.has(workspace.id);
 
                       return (
-                        <button
+                        <div
                           key={workspace.id}
-                          type="button"
+                          role="button"
+                          tabIndex={0}
                           className={`ws-card ${isPending ? "pending" : ""}`}
                           onClick={() => handleOpenWorkspace(workspace)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              handleOpenWorkspace(workspace);
+                            }
+                          }}
                           aria-busy={isPending}
                         >
                           <div className="ws-bg" style={{ backgroundImage: getBackground(workspace.theme, index) }} />
                           <div className="ws-overlay" />
                           <div className="ws-accent-strip" style={{ background: getThemeAccent(workspace.theme) }} />
+                          <button
+                            type="button"
+                            className="ws-delete-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteWorkspace(workspace.id);
+                            }}
+                          >
+                            -
+                          </button>
                           <div className="ws-label-wrap">
                             <div className="ws-label">{workspace.name}</div>
                           </div>
@@ -796,7 +882,7 @@ export default function DashboardPolished() {
                               ))}
                             </div>
                           </div>
-                        </button>
+                        </div>
                       );
                     })}
 
@@ -1731,6 +1817,29 @@ export default function DashboardPolished() {
         .ws-card:hover { transform: translateY(-5px) scale(1.014); box-shadow: 0 14px 52px rgba(44, 38, 28, 0.17); }
         .ws-card.pending { cursor: progress; }
         .ws-card.pending .ws-overlay { background: linear-gradient(180deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.62) 100%); }
+
+        .ws-delete-btn {
+          position: absolute;
+          top: 10px;
+          right: 10px;
+          width: 24px;
+          height: 24px;
+          border-radius: 6px;
+          background: rgba(255, 255, 255, 0.8);
+          border: 1px solid rgba(0, 0, 0, 0.1);
+          color: var(--text);
+          font-size: 16px;
+          line-height: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          opacity: 0;
+          transition: opacity 0.2s, background 0.2s, color 0.2s;
+          z-index: 10;
+        }
+        .ws-card:hover .ws-delete-btn { opacity: 1; }
+        .ws-delete-btn:hover { background: #e74c3c; color: white; border-color: #e74c3c; }
         .ws-bg { position: absolute; inset: 0; background-size: cover; background-position: center; transition: transform 0.4s ease; }
         .ws-card:hover .ws-bg { transform: scale(1.05); }
 
@@ -2221,6 +2330,21 @@ export default function DashboardPolished() {
           50% { opacity: 1; }
         }
       `}</style>
+
+      <ProfileModal
+        isVisible={profileModalVisible}
+        userName={userName}
+        fallbackInitials={initials(userName).slice(0, 2)}
+        profile={profileSettings}
+        passwordForm={passwordForm}
+        passwordError={passwordError}
+        passwordSuccess={passwordSuccess}
+        onClose={() => setProfileModalVisible(false)}
+        onLogout={() => signOut({ callbackUrl: "/auth/sign-in" })}
+        onUpdateProfile={handleUpdateProfile}
+        onUpdatePassword={handleUpdatePassword}
+        onSavePassword={handleSavePassword}
+      />
     </>
   );
 }
