@@ -1322,7 +1322,7 @@ export default function DashboardPolished() {
                         const timeDiff = Date.now() - new Date(s.lastActiveAt).getTime();
                         const minutesAgo = Math.floor(timeDiff / 60000);
                         const hoursAgo = Math.floor(timeDiff / 3600000);
-                        const isActiveNow = s.isCurrent || minutesAgo < 5;
+                        const isActiveNow = s.isCurrent || minutesAgo < 15;
                         const timeLabel = isActiveNow
                           ? "Active now"
                           : minutesAgo < 60
