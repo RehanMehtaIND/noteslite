@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import ProfileModal, { type ProfileSettings, type PasswordForm } from "./profile-modal";
+import QuickNotesView, { type QuickNote } from "./quick-notes";
 
 type WorkspaceItem = {
   id: string;
@@ -24,7 +25,7 @@ type SessionItem = {
 };
 
 type WorkspaceTag = "active" | "board" | "canvas";
-type View = "dashboard" | "templates";
+type View = "dashboard" | "templates" | "quick-notes";
 type TemplateType = "todo" | "expense" | "notes";
 
 type TemplateItem = {
@@ -215,6 +216,39 @@ export default function DashboardPolished() {
   const [toast, setToast] = useState("");
   const [pendingWorkspaceIds, setPendingWorkspaceIds] = useState<Set<string>>(new Set());
 
+  // Quick Notes state (client-side only, persisted via localStorage)
+  const [quickNotes, setQuickNotes] = useState<QuickNote[]>([]);
+  const quickNotesLoaded = useRef(false);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("noteslite-quick-notes");
+      if (stored) setQuickNotes(JSON.parse(stored));
+    } catch {}
+    quickNotesLoaded.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (!quickNotesLoaded.current) return;
+    try { localStorage.setItem("noteslite-quick-notes", JSON.stringify(quickNotes)); } catch {}
+  }, [quickNotes]);
+
+  const pinnedNotes = useMemo(() => quickNotes.filter((n) => n.pinned), [quickNotes]);
+
+  function handleAddPinnedNote() {
+    const newNote: QuickNote = {
+      id: `qn-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      title: "New Pinned Note",
+      description: "",
+      color: "#C07850",
+      pinned: true,
+      createdAt: new Date().toISOString(),
+    };
+    setQuickNotes((prev) => [newNote, ...prev]);
+    setView("quick-notes");
+    setToast("Pinned note created — edit it in Quick Notes");
+  }
+
   // Profile modal state
   const [profileModalVisible, setProfileModalVisible] = useState(false);
   const [profileSettings, setProfileSettings] = useState<ProfileSettings>({
@@ -250,8 +284,8 @@ export default function DashboardPolished() {
 
   useEffect(() => {
     if (session?.user?.email) {
-      setProfileSettings((prev) => ({ 
-        ...prev, 
+      setProfileSettings((prev) => ({
+        ...prev,
         email: session.user.email as string,
         emailVerified: !!session.user.emailVerified,
       }));
@@ -276,13 +310,13 @@ export default function DashboardPolished() {
           try {
             const errData = await response.json();
             if (errData.error) errMsg = errData.error;
-          } catch (e) {}
+          } catch (e) { }
           throw new Error(errMsg);
         }
 
         const data = await response.json();
-        setProfileSettings((prev) => ({ 
-          ...prev, 
+        setProfileSettings((prev) => ({
+          ...prev,
           twoFactorEnabled: data.twoFactorEnabled,
           twoFactorMethod: data.twoFactorMethod
         }));
@@ -318,7 +352,7 @@ export default function DashboardPolished() {
       setPasswordError("Passwords do not match");
       return;
     }
-    
+
     setIsPasswordLoading(true);
     setPasswordError(null);
     setPasswordSuccess(null);
@@ -359,11 +393,11 @@ export default function DashboardPolished() {
     try {
       const response = await fetch("/api/auth/verify-email", { method: "POST" });
       const data = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(data.error || "Failed to send OTP");
       }
-      
+
       setEmailVerifyStep("otp");
       setToast("Verification code sent to your email");
     } catch (error: unknown) {
@@ -379,23 +413,23 @@ export default function DashboardPolished() {
 
   async function handleConfirmEmailOtp() {
     if (emailOtpForm.length !== 6) return;
-    
+
     setIsEmailVerifying(true);
     setEmailVerifyError(null);
-    
+
     try {
       const response = await fetch("/api/auth/verify-email/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ otp: emailOtpForm }),
       });
-      
+
       const data = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(data.error || "Failed to verify email");
       }
-      
+
       setProfileSettings((prev) => ({ ...prev, emailVerified: true }));
       setEmailVerifyStep("idle");
       setEmailOtpForm("");
@@ -740,9 +774,9 @@ export default function DashboardPolished() {
           next.add(realWorkspace.id);
           return next;
         });
-        
+
         await seedTemplateWorkspace(realWorkspace.id, templateId);
-        
+
         // Remove the real ID from pending once seeded
         setPendingWorkspaceIds((current) => {
           const next = new Set(current);
@@ -889,7 +923,7 @@ export default function DashboardPolished() {
                 <span className="l3" />
               </button>
               <div className="brand-text">
-                <div className="brand-name">Note<em>Lite</em></div>
+                <div className="brand-name">Notes<em>Lite</em></div>
                 <div className="brand-tag">Visual Workspace</div>
               </div>
             </div>
@@ -907,6 +941,18 @@ export default function DashboardPolished() {
               >
                 <div className="sb-icon">⊞</div>
                 <span className="sb-lbl">Dashboard</span>
+              </button>
+              <button
+                type="button"
+                className={`sb-item ${view === "quick-notes" ? "active" : ""}`}
+                onClick={() => {
+                  setView("quick-notes");
+                  setTemplateSubView(null);
+                  setMobileSidebarOpen(false);
+                }}
+              >
+                <div className="sb-icon" style={{ background: "rgba(122,106,160,0.12)" }}>✎</div>
+                <span className="sb-lbl">Quick Notes</span>
               </button>
 
               <div className="sb-section-lbl" style={{ marginTop: 4 }}>Templates</div>
@@ -956,7 +1002,7 @@ export default function DashboardPolished() {
             </div>
 
             <div className="sidebar-footer">
-              <button className="user-card" type="button" onClick={() => setToast("Profile settings coming soon") }>
+              <button className="user-card" type="button" onClick={() => setToast("Profile settings coming soon")}>
                 <div className="user-av">{initials(userName).slice(0, 1)}</div>
                 <div className="user-info-sb">
                   <div className="user-name">{userName}</div>
@@ -975,7 +1021,7 @@ export default function DashboardPolished() {
               </button>
 
               <div className="topbar-context">
-                <div className="ctx-page">{view === "dashboard" ? "Dashboard" : "Templates"}</div>
+                <div className="ctx-page">{view === "dashboard" ? "Dashboard" : view === "quick-notes" ? "Quick Notes" : "Templates"}</div>
                 {templateSubView ? <div className="ctx-sep">/</div> : null}
                 {templateSubView ? (
                   <div className="ctx-sub">{TEMPLATE_ITEMS.find((item) => item.id === templateSubView)?.title}</div>
@@ -995,7 +1041,7 @@ export default function DashboardPolished() {
                   const isDesktop = /windows|mac|linux/i.test(s.os);
                   const isTablet = /ipad/i.test(s.deviceName);
                   const icon = isTablet ? "⬜" : isDesktop ? "💻" : "📱";
-                  
+
                   const timeDiff = Date.now() - new Date(s.lastActiveAt).getTime();
                   const minutesAgo = Math.floor(timeDiff / 60000);
                   const isActiveNow = s.isCurrent || minutesAgo < 5;
@@ -1003,9 +1049,9 @@ export default function DashboardPolished() {
                   const isIdle = !isActiveNow && minutesAgo >= 10;
 
                   return (
-                    <div 
-                      key={s.id} 
-                      className={`device-icon ${!isIdle ? "synced" : ""}`} 
+                    <div
+                      key={s.id}
+                      className={`device-icon ${!isIdle ? "synced" : ""}`}
                       title={`${s.deviceName} - ${status}`}
                       style={isIdle ? { opacity: 0.5 } : {}}
                     >
@@ -1230,10 +1276,10 @@ export default function DashboardPolished() {
                         const timeLabel = isActiveNow
                           ? "Active now"
                           : minutesAgo < 60
-                          ? `${minutesAgo}m ago`
-                          : hoursAgo < 24
-                          ? `${hoursAgo}h ago`
-                          : `${Math.floor(hoursAgo / 24)}d ago`;
+                            ? `${minutesAgo}m ago`
+                            : hoursAgo < 24
+                              ? `${hoursAgo}h ago`
+                              : `${Math.floor(hoursAgo / 24)}d ago`;
 
                         const isDesktop = /windows|mac|linux/i.test(s.os);
                         const isTablet = /ipad/i.test(s.deviceName);
@@ -1311,25 +1357,25 @@ export default function DashboardPolished() {
                   </div>
 
                   <div>
-                    <div className="section-header" style={{ marginBottom: 10 }}><div className="section-title">Quick Notes</div></div>
+                    <div className="section-header" style={{ marginBottom: 10 }}>
+                      <div className="section-title">Pinned Quick Notes</div>
+                      <div className="section-count">{pinnedNotes.length}</div>
+                      <div className="section-action" onClick={() => setView("quick-notes")}>View all →</div>
+                    </div>
                     <div className="quick-panel">
                       <div className="quick-header">
                         <div className="quick-title">Pinned</div>
-                        <button className="quick-add-btn" type="button" onClick={() => setToast("Note added")}>+</button>
+                        <button className="quick-add-btn" type="button" onClick={handleAddPinnedNote} title="Add pinned note">+</button>
                       </div>
                       <div className="quick-notes">
-                        <div className="quick-note" style={{ ["--nc" as string]: "#C07850", ["--nb" as string]: "rgba(192,120,80,0.07)" }}>
-                          <div className="qn-title">DSA Revision</div>
-                          BFS/DFS pattern - revisit after graphs.
-                        </div>
-                        <div className="quick-note" style={{ ["--nc" as string]: "#5A7A9A", ["--nb" as string]: "rgba(90,122,154,0.07)" }}>
-                          <div className="qn-title">Game Dev Idea</div>
-                          A* for enemy nav in tilemap levels.
-                        </div>
-                        <div className="quick-note" style={{ ["--nc" as string]: "#A06878", ["--nb" as string]: "rgba(160,104,120,0.07)" }}>
-                          <div className="qn-title">Poem Draft</div>
-                          Mountain sonnet - third stanza unresolved.
-                        </div>
+                        {pinnedNotes.length === 0 ? (
+                          <div style={{ padding: "16px 12px", fontSize: 12, color: "var(--text3)", textAlign: "center" }}>No pinned notes yet</div>
+                        ) : pinnedNotes.slice(0, 5).map((note) => (
+                          <div key={note.id} className="quick-note" style={{ ["--nc" as string]: note.color, ["--nb" as string]: `${note.color}12`, cursor: "pointer" }} onClick={() => setView("quick-notes")}>
+                            <div className="qn-title">📌 {note.title}</div>
+                            {note.description ? note.description.slice(0, 60) + (note.description.length > 60 ? "..." : "") : "No description"}
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
@@ -1377,6 +1423,10 @@ export default function DashboardPolished() {
                     </article>
                   ))}
                 </div>
+              </div>
+
+              <div className={`view-panel ${view === "quick-notes" ? "active" : ""}`}>
+                <QuickNotesView notes={quickNotes} onNotesChange={setQuickNotes} onToast={setToast} />
               </div>
             </div>
           </div>
