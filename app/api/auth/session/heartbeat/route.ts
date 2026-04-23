@@ -16,13 +16,19 @@ export async function POST(req: Request) {
     const sessionToken = sessionWithToken.sessionToken;
 
     if (!sessionToken) {
+      console.warn("[Heartbeat] No session token found for user:", session.user.id);
       return NextResponse.json({ error: "No session token found" }, { status: 400 });
     }
 
-    await prisma.session.update({
-      where: { sessionToken },
-      data: { lastActiveAt: new Date() },
-    });
+    try {
+      await prisma.session.update({
+        where: { sessionToken },
+        data: { lastActiveAt: new Date() },
+      });
+      // console.log("[Heartbeat] Updated lastActiveAt for session:", sessionToken);
+    } catch (dbError) {
+      console.error("[Heartbeat] Failed to update session in DB:", dbError);
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

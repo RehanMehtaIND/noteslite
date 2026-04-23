@@ -60,7 +60,6 @@ const THEME_COLORS: Record<string, string> = {
 const DEFAULT_GRADIENT = "linear-gradient(135deg, #a8c4d4 0%, #c4a8d4 100%)";
 const HEX_COLOR_PATTERN = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 const GRADIENT_PATTERN = /^(linear-gradient|radial-gradient|conic-gradient)\(.+\)$/i;
-const PROFILE_STORAGE_KEY = "noteslite.dashboard.profile.v1";
 const PROFILE_MODAL_DURATION = 240;
 const DEFAULT_PASSWORD_FORM: PasswordForm = {
   currentPassword: "",
@@ -157,6 +156,7 @@ function createDefaultProfileSettings({
   return {
     avatarMode: avatarUrl ? "url" : "placeholder",
     avatarUrl,
+    displayName: "",
     email,
     emailVerified,
     showEmail: true,
@@ -179,10 +179,11 @@ function mergeStoredProfileSettings(
 
   return {
     avatarMode:
-      candidate.avatarMode === "placeholder" || candidate.avatarMode === "url"
+      candidate.avatarMode === "placeholder" || candidate.avatarMode === "url" || candidate.avatarMode === "initials"
         ? candidate.avatarMode
         : defaults.avatarMode,
     avatarUrl: typeof candidate.avatarUrl === "string" ? candidate.avatarUrl : defaults.avatarUrl,
+    displayName: typeof candidate.displayName === "string" ? candidate.displayName : defaults.displayName,
     email: typeof candidate.email === "string" ? candidate.email : defaults.email,
     emailVerified:
       typeof candidate.emailVerified === "boolean"
@@ -455,15 +456,18 @@ export default function DashboardClient({
 
   useEffect(() => {
     if (!hasHydratedProfileRef.current) {
-      try {
-        const raw = window.localStorage.getItem(PROFILE_STORAGE_KEY);
-        const parsed = raw ? (JSON.parse(raw) as unknown) : null;
-        setProfile(mergeStoredProfileSettings(defaultProfile, parsed));
-      } catch {
-        setProfile(defaultProfile);
-      }
-
       hasHydratedProfileRef.current = true;
+      fetch("/api/profile")
+        .then((res) => {
+          if (!res.ok) throw new Error("Failed to load profile");
+          return res.json();
+        })
+        .then((data) => {
+          setProfile(mergeStoredProfileSettings(defaultProfile, data));
+        })
+        .catch(() => {
+          setProfile(defaultProfile);
+        });
       return;
     }
 
@@ -495,7 +499,16 @@ export default function DashboardClient({
       return;
     }
 
-    window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+    fetch("/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        avatarMode: profile.avatarMode,
+        avatarUrl: profile.avatarUrl,
+        displayName: profile.displayName,
+        showEmail: profile.showEmail,
+      }),
+    }).catch(console.error);
   }, [profile]);
 
   useEffect(() => {
