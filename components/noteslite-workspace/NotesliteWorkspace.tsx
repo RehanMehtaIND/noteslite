@@ -12,18 +12,23 @@ import ColumnModal from './ColumnModal';
 export type ViewMode = 'board' | 'canvas';
 export type ScreenMode = 'ws' | 'editor';
 
-export default function NotesliteWorkspace() {
+export default function NotesliteWorkspace({ initialData }: { initialData?: any }) {
   const [activeView, setActiveView] = useState<ViewMode>('board');
   const [activeScreen, setActiveScreen] = useState<ScreenMode>('ws');
   
   const [columns, setColumns] = useState<any[]>(() => {
+    if (initialData?.columns) return initialData.columns;
     return CV_SEED.filter(s => s.type === 'column').map(s => ({ ...s }));
   });
   const [canvasItems, setCanvasItems] = useState<any[]>(() => {
+    if (initialData?.canvasItems) return initialData.canvasItems;
     return CV_SEED.map(s => ({ ...s }));
   });
   
-  const [cardsData, setCardsData] = useState<Record<string, any>>(INITIAL_CARD_DATA);
+  const [cardsData, setCardsData] = useState<Record<string, any>>(() => {
+    if (initialData?.cardsData) return initialData.cardsData;
+    return INITIAL_CARD_DATA;
+  });
 
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);

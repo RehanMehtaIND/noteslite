@@ -72,6 +72,36 @@ const TEMPLATE_COLORS: Record<TemplateType, string> = {
   notes: "#5A7A9A",
 };
 
+type TemplateSeedCard = { title: string; columnIndex: number };
+type TemplateSeed = { columns: string[]; cards: TemplateSeedCard[] };
+
+const TEMPLATE_SEEDS: Record<TemplateType, TemplateSeed> = {
+  todo: {
+    columns: ["Not Started", "Ongoing", "Completed"],
+    cards: [
+      { title: "Design database schema", columnIndex: 0 },
+      { title: "Implement user authentication", columnIndex: 1 },
+      { title: "Setup project repository", columnIndex: 2 },
+    ],
+  },
+  expense: {
+    columns: ["Income", "Needs", "Wants"],
+    cards: [
+      { title: "Salary credit", columnIndex: 0 },
+      { title: "Pay electricity bill", columnIndex: 1 },
+      { title: "Buy concert tickets", columnIndex: 2 },
+    ],
+  },
+  notes: {
+    columns: ["Ideas", "Drafts", "Published"],
+    cards: [
+      { title: "Mobile app features brainstorm", columnIndex: 0 },
+      { title: "Weekly progress report", columnIndex: 1 },
+      { title: "Meeting minutes - Q2 Planning", columnIndex: 2 },
+    ],
+  },
+};
+
 const COLOR_SWATCHES = ["#C07850", "#5A8A6A", "#5A7A9A", "#A06878", "#B8963C", "#7A6AA0"];
 
 const WORKSPACE_FALLBACK_IMAGES = [
@@ -416,6 +446,8 @@ export default function DashboardPolished() {
 
   const workspaceCount = workspaces.length;
   const totalCards = workspaces.reduce((sum, ws) => sum + (ws._count?.cards ?? 0), 0);
+  const templateColorsSet = useMemo(() => new Set(Object.values(TEMPLATE_COLORS)), []);
+  const templatesUsedCount = workspaces.filter(ws => templateColorsSet.has(ws.theme)).length;
 
   useEffect(() => {
     if (!toast) return;
@@ -487,8 +519,8 @@ export default function DashboardPolished() {
     if (status !== "authenticated") return;
     let cancelled = false;
 
-    async function loadSessions() {
-      setIsLoadingSessions(true);
+    async function loadSessions(isInitial = false) {
+      if (isInitial) setIsLoadingSessions(true);
       try {
         const res = await fetch("/api/auth/sessions");
         if (res.ok && !cancelled) {
@@ -498,12 +530,20 @@ export default function DashboardPolished() {
       } catch {
         // Silently fail — devices section is non-critical
       } finally {
-        if (!cancelled) setIsLoadingSessions(false);
+        if (!cancelled && isInitial) setIsLoadingSessions(false);
       }
     }
 
-    void loadSessions();
-    return () => { cancelled = true; };
+    void loadSessions(true);
+
+    const intervalId = setInterval(() => {
+      void loadSessions(false);
+    }, 60000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
   }, [status]);
 
   useEffect(() => {
@@ -580,14 +620,62 @@ export default function DashboardPolished() {
     return () => window.clearTimeout(timer);
   }, [templateSubView, view]);
 
-  async function createWorkspace(name: string, color: string) {
+  /** Seed template columns and starter cards after workspace creation. */
+  async function seedTemplateWorkspace(workspaceId: string, templateId: TemplateType) {
+    const seed = TEMPLATE_SEEDS[templateId];
+    if (!seed) return;
+
+    // Create columns sequentially (order matters for orderIndex)
+    const columnIds: string[] = [];
+    for (const colName of seed.columns) {
+      try {
+        const res = await fetch(`/api/workspaces/${workspaceId}/columns`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: colName }),
+        });
+        const data = (await res.json().catch(() => null)) as { column?: { id: string } } | null;
+        columnIds.push(data?.column?.id ?? "");
+      } catch {
+        columnIds.push("");
+      }
+    }
+
+    // Create starter cards in parallel to speed up seeding
+    const cardCount = { cards: seed.cards.length, columns: seed.columns.length };
+    const cardPromises = seed.cards.map(async (card) => {
+      const colId = columnIds[card.columnIndex];
+      if (!colId) return;
+      return fetch(`/api/workspaces/${workspaceId}/cards`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: card.title, columnId: colId }),
+      }).catch(() => null);
+    });
+    await Promise.all(cardPromises);
+
+    // Update the workspace card/column counts in local state
+    setWorkspaces((current) =>
+      current.map((ws) =>
+        ws.id === workspaceId
+          ? { ...ws, _count: cardCount }
+          : ws
+      )
+    );
+  }
+
+  async function createWorkspace(name: string, color: string, templateId?: TemplateType) {
     const optimisticId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const seedCount = templateId ? TEMPLATE_SEEDS[templateId] : null;
     const optimisticWorkspace: WorkspaceItem = {
       id: optimisticId,
       name,
       theme: `color:${color}`,
       createdAt: new Date().toISOString(),
-      _count: { cards: 0, columns: 0 },
+      _count: {
+        cards: seedCount?.cards.length ?? 0,
+        columns: seedCount?.columns.length ?? 0,
+      },
     };
 
     setWorkspaces((current) => [...current, optimisticWorkspace]);
@@ -636,11 +724,33 @@ export default function DashboardPolished() {
         return;
       }
 
+      const realWorkspace = payload.workspace as WorkspaceItem;
+
       setWorkspaces((current) =>
         current.map((workspace) =>
-          workspace.id === optimisticId ? (payload.workspace as WorkspaceItem) : workspace
+          workspace.id === optimisticId ? realWorkspace : workspace
         )
       );
+
+      // Seed template columns + cards while keeping the UI in a pending state
+      if (templateId) {
+        // Add the real ID to pending so handleOpenWorkspace blocks entry
+        setPendingWorkspaceIds((current) => {
+          const next = new Set(current);
+          next.add(realWorkspace.id);
+          return next;
+        });
+        
+        await seedTemplateWorkspace(realWorkspace.id, templateId);
+        
+        // Remove the real ID from pending once seeded
+        setPendingWorkspaceIds((current) => {
+          const next = new Set(current);
+          next.delete(realWorkspace.id);
+          return next;
+        });
+      }
+
       setPendingWorkspaceIds((current) => {
         const next = new Set(current);
         next.delete(optimisticId);
@@ -720,7 +830,7 @@ export default function DashboardPolished() {
       return;
     }
 
-    void createWorkspace(name, TEMPLATE_COLORS[selectedTemplate.id]);
+    void createWorkspace(name, TEMPLATE_COLORS[selectedTemplate.id], selectedTemplate.id);
     setTemplateOpen(false);
   }
 
@@ -998,7 +1108,7 @@ export default function DashboardPolished() {
                   <div className="stat-card">
                     <div className="stat-accent" style={{ background: "linear-gradient(90deg,#5A7A9A,#7A9ABB)" }} />
                     <div className="stat-label">Templates Used</div>
-                    <div className="stat-value">{TEMPLATE_ITEMS.length}</div>
+                    <div className="stat-value">{templatesUsedCount}</div>
                     <div className="stat-sub">This month</div>
                     <div className="stat-glyph">◈</div>
                   </div>
