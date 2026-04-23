@@ -304,9 +304,10 @@ export default function DashboardPolished() {
   const [profileSettings, setProfileSettings] = useState<ProfileSettings>({
     avatarMode: "placeholder",
     avatarUrl: "",
+    displayName: "",
     email: "",
     emailVerified: false,
-    showEmail: true,
+    showEmail: false,
     timezone: "UTC",
     emailNotifications: true,
     twoFactorEnabled: false,
@@ -341,6 +342,27 @@ export default function DashboardPolished() {
       }));
     }
   }, [session?.user]);
+
+  // Fetch initial profile settings from database
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    
+    fetch("/api/profile")
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to load profile");
+        return res.json();
+      })
+      .then((data) => {
+        setProfileSettings((prev) => ({
+          ...prev,
+          ...(data.avatarMode && { avatarMode: data.avatarMode }),
+          ...(data.avatarUrl !== undefined && { avatarUrl: data.avatarUrl }),
+          ...(data.displayName !== undefined && { displayName: data.displayName }),
+          ...(data.showEmail !== undefined && { showEmail: data.showEmail }),
+        }));
+      })
+      .catch((err) => console.error("Error loading profile settings:", err));
+  }, [status]);
 
   async function handleUpdateProfile(updates: Partial<ProfileSettings>) {
     if ("twoFactorEnabled" in updates || "twoFactorMethod" in updates) {
@@ -379,6 +401,24 @@ export default function DashboardPolished() {
       }
     } else {
       setProfileSettings((prev) => ({ ...prev, ...updates }));
+      
+      // Extract only the fields we actually want to save to the database profile table
+      const { avatarMode, avatarUrl, displayName, showEmail } = updates;
+      
+      const payload: Record<string, any> = {};
+      if (avatarMode !== undefined) payload.avatarMode = avatarMode;
+      if (avatarUrl !== undefined) payload.avatarUrl = avatarUrl;
+      if (displayName !== undefined) payload.displayName = displayName;
+      if (showEmail !== undefined) payload.showEmail = showEmail;
+
+      if (Object.keys(payload).length > 0) {
+        fetch("/api/profile", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }).catch((err) => console.error("Failed to save profile setting:", err));
+      }
+
       setToast("Profile setting updated");
     }
   }

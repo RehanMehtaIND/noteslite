@@ -159,7 +159,7 @@ function createDefaultProfileSettings({
     displayName: "",
     email,
     emailVerified,
-    showEmail: true,
+    showEmail: false,
     timezone: getLocalTimezone(),
     emailNotifications: true,
     twoFactorEnabled: false,
