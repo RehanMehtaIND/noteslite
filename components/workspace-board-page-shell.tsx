@@ -8,8 +8,10 @@ import NotesliteWorkspace from "@/components/noteslite-workspace/NotesliteWorksp
 
 export default function WorkspaceBoardPageShell({
   workspaceId,
+  initialData,
 }: {
   workspaceId: string;
+  initialData?: any;
 }) {
   const router = useRouter();
   const { data: session, status } = useSession();
@@ -39,5 +41,5 @@ export default function WorkspaceBoardPageShell({
     );
   }
 
-  return <NotesliteWorkspace />;
+  return <NotesliteWorkspace initialData={initialData} />;
 }
