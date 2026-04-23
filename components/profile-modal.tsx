@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 
 export type ProfileSettings = {
   avatarMode: "placeholder" | "url";
@@ -11,7 +11,7 @@ export type ProfileSettings = {
   timezone: string;
   emailNotifications: boolean;
   twoFactorEnabled: boolean;
-  twoFactorMethod: "authenticator" | "sms";
+  twoFactorMethod: "authenticator" | "sms" | "email";
 };
 
 export type PasswordForm = {
@@ -48,22 +48,17 @@ type ProfileModalProps = {
 };
 
 const TIMEZONE_OPTIONS = [
-  "UTC",
-  "Asia/Kolkata",
-  "Europe/London",
-  "Europe/Berlin",
-  "America/New_York",
-  "America/Los_Angeles",
-  "America/Chicago",
-  "Asia/Singapore",
-  "Australia/Sydney",
+  { value: "UTC", label: "UTC" },
+  { value: "Asia/Kolkata", label: "IST — India Standard Time (UTC+5:30)" },
+  { value: "America/New_York", label: "EST — Eastern Standard Time (UTC-5)" },
+  { value: "America/Los_Angeles", label: "PST — Pacific Standard Time (UTC-8)" },
+  { value: "Europe/London", label: "GMT — Greenwich Mean Time" },
+  { value: "Europe/Berlin", label: "CET — Central European Time (UTC+1)" },
+  { value: "Asia/Tokyo", label: "JST — Japan Standard Time (UTC+9)" }
 ] as const;
 
 function isValidImageUrl(value: string) {
-  if (!value.trim()) {
-    return false;
-  }
-
+  if (!value.trim()) return false;
   try {
     const url = new URL(value);
     return url.protocol === "http:" || url.protocol === "https:";
@@ -73,10 +68,7 @@ function isValidImageUrl(value: string) {
 }
 
 function getFocusableElements(container: HTMLElement | null) {
-  if (!container) {
-    return [];
-  }
-
+  if (!container) return [];
   return Array.from(
     container.querySelectorAll<HTMLElement>(
       'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
@@ -86,79 +78,9 @@ function getFocusableElements(container: HTMLElement | null) {
 
 function maskEmail(email: string) {
   const [local, domain] = email.split("@");
-
-  if (!local || !domain) {
-    return email || "No email available";
-  }
-
-  if (local.length <= 2) {
-    return `${local[0] ?? ""}•@${domain}`;
-  }
-
+  if (!local || !domain) return email || "No email available";
+  if (local.length <= 2) return `${local[0] ?? ""}•@${domain}`;
   return `${local[0]}${"•".repeat(Math.max(local.length - 2, 1))}${local[local.length - 1]}@${domain}`;
-}
-
-function Toggle({
-  checked,
-  label,
-  disabled,
-  onChange,
-}: {
-  checked: boolean;
-  label: string;
-  disabled?: boolean;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-      className={`inline-flex h-8 min-w-[66px] items-center rounded-full border px-1 transition-[background-color,border-color,box-shadow,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dashboard-modal-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[rgba(244,245,248,0.98)] disabled:opacity-50 disabled:cursor-not-allowed ${
-        checked
-          ? "justify-end border-[rgba(111,142,163,0.48)] bg-[rgba(111,142,163,0.18)]"
-          : "justify-start border-[rgba(191,194,202,0.92)] bg-[rgba(255,255,255,0.84)]"
-      }`}
-    >
-      <span
-        className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[9px] font-semibold uppercase tracking-[0.12em] transition-colors duration-200 ${
-          checked ? "bg-[#6f8ea3] text-white" : "bg-[rgba(221,224,231,0.96)] text-[#6a6e76]"
-        }`}
-      >
-        {checked ? "On" : "Off"}
-      </span>
-    </button>
-  );
-}
-
-function SectionCard({
-  eyebrow,
-  title,
-  description,
-  children,
-}: {
-  eyebrow: string;
-  title: string;
-  description: string;
-  children: ReactNode;
-}) {
-  return (
-    <article className="rounded-[24px] border border-[rgba(211,213,221,0.88)] bg-[rgba(255,255,255,0.8)] p-4 shadow-[0_10px_24px_rgba(57,53,49,0.08)] md:p-5">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8a8f98]">
-        {eyebrow}
-      </p>
-      <h3 className="mt-2 text-[19px] font-medium tracking-[0.02em] text-[#5b5f67]">
-        {title}
-      </h3>
-      <p className="mt-1 text-[13px] leading-6 text-[#747983]">
-        {description}
-      </p>
-      <div className="mt-4">{children}</div>
-    </article>
-  );
 }
 
 export default function ProfileModal({
@@ -186,30 +108,27 @@ export default function ProfileModal({
 }: ProfileModalProps) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const firstActionRef = useRef<HTMLButtonElement | null>(null);
+  const closeBtnRef = useRef<HTMLButtonElement | null>(null);
+
+  const [imgUrlInput, setImgUrlInput] = useState(profile.avatarUrl);
+
+  useEffect(() => {
+    setImgUrlInput(profile.avatarUrl);
+  }, [profile.avatarUrl]);
 
   const displayedEmail = useMemo(
     () => (profile.showEmail ? profile.email || "No email available" : maskEmail(profile.email)),
     [profile.email, profile.showEmail],
   );
 
-  const avatarPreviewStyle = useMemo(() => {
-    if (profile.avatarMode === "url" && isValidImageUrl(profile.avatarUrl)) {
-      return {
-        backgroundImage: `linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(0,0,0,0.16) 100%), url("${profile.avatarUrl}")`,
-      };
-    }
-
-    return {};
-  }, [profile.avatarMode, profile.avatarUrl]);
+  const nameParts = userName.split(/\s+/);
+  const firstName = nameParts[0] || "User";
+  const lastName = nameParts.slice(1).join(" ") || "";
 
   useEffect(() => {
-    if (!isVisible) {
-      return;
-    }
-
+    if (!isVisible) return;
     const focusFrame = window.requestAnimationFrame(() => {
-      firstActionRef.current?.focus();
+      closeBtnRef.current?.focus();
     });
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -220,10 +139,7 @@ export default function ProfileModal({
         onClose();
         return;
       }
-
-      if (event.key !== "Tab") {
-        return;
-      }
+      if (event.key !== "Tab") return;
 
       const focusable = getFocusableElements(panelRef.current);
       if (focusable.length === 0) {
@@ -241,7 +157,6 @@ export default function ProfileModal({
         }
         return;
       }
-
       if (currentIndex === -1 || currentIndex === focusable.length - 1) {
         event.preventDefault();
         focusable[0]?.focus();
@@ -249,7 +164,6 @@ export default function ProfileModal({
     };
 
     document.addEventListener("keydown", handleKeyDown);
-
     return () => {
       window.cancelAnimationFrame(focusFrame);
       document.body.style.overflow = previousOverflow;
@@ -257,430 +171,525 @@ export default function ProfileModal({
     };
   }, [isVisible, onClose]);
 
+  const applyImage = () => {
+    if (!imgUrlInput.trim()) return;
+    onUpdateProfile({ avatarUrl: imgUrlInput, avatarMode: "url" });
+  };
+
+  const pwStrength = useMemo(() => {
+    const val = passwordForm.newPassword;
+    let score = 0;
+    if (!val) return { score: 0, pct: 0, color: '', label: '' };
+    if (val.length >= 8) score++;
+    if (/[A-Z]/.test(val)) score++;
+    if (/[0-9]/.test(val)) score++;
+    if (/[^A-Za-z0-9]/.test(val)) score++;
+    const pct = (score / 4) * 100;
+    const colors = ['#E24B4A','#EF9F27','#63B927','#1D9E75'];
+    const labels = ['Weak','Fair','Good','Strong'];
+    return { score, pct, color: colors[score - 1] || '#E24B4A', label: labels[score - 1] || 'Weak' };
+  }, [passwordForm.newPassword]);
+
+  const pwMatch = useMemo(() => {
+    if (!passwordForm.confirmPassword) return null;
+    return passwordForm.newPassword === passwordForm.confirmPassword;
+  }, [passwordForm.newPassword, passwordForm.confirmPassword]);
+
+  const canSavePassword = 
+    passwordForm.currentPassword && 
+    passwordForm.newPassword.length >= 8 && 
+    pwMatch && 
+    !isPasswordLoading;
+
   return (
-    <div
-      className={`fixed inset-0 z-[140] flex items-center justify-center p-4 transition-opacity duration-[220ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
-        isVisible ? "opacity-100" : "pointer-events-none opacity-0"
-      }`}
-    >
-      <div
-        className="absolute inset-0 bg-[var(--dashboard-modal-overlay)] backdrop-blur-[10px]"
-        onMouseDown={onClose}
-      />
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap');
 
-      <div
-        ref={panelRef}
-        id="dashboard-profile-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        className={`dashboard-modal-scroll relative z-[1] flex max-h-[min(86vh,780px)] w-full max-w-[880px] flex-col overflow-hidden rounded-[32px] border bg-[var(--dashboard-modal-panel-base)] [background-image:var(--dashboard-modal-panel-gradient)] text-[#64666b] shadow-[var(--dashboard-modal-shadow)] transition-[opacity,transform] duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
-          isVisible ? "translate-y-0 scale-100 opacity-100" : "translate-y-4 scale-[0.97] opacity-0"
-        }`}
-      >
-        <div className="border-b border-[var(--dashboard-modal-border)] px-5 py-4 md:px-8 md:py-5">
-          <div className="relative flex min-h-10 items-center justify-center">
-            <div className="text-center">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8a8f98]">
-                Dashboard Profile
-              </p>
-              <h2
-                id={titleId}
-                className="mt-1 text-[28px] leading-none font-medium tracking-[0.04em] text-[#5d6168] [font-family:'Cinzel','Times_New_Roman',serif]"
-              >
-                {userName}
-              </h2>
+        .pm-root {
+          --pm-cream: #F2EFE9;
+          --pm-cream-deep: #E8E3DA;
+          --pm-cream-card: #FAFAF8;
+          --pm-ink: #1C1A17;
+          --pm-ink-muted: #6B6760;
+          --pm-ink-faint: #A09D98;
+          --pm-border: rgba(28,26,23,0.1);
+          --pm-border-strong: rgba(28,26,23,0.18);
+          --pm-teal: #0F6E56;
+          --pm-teal-bg: #E1F5EE;
+          --pm-amber: #854F0B;
+          --pm-amber-bg: #FAEEDA;
+          --pm-purple: #534AB7;
+          --pm-purple-bg: #EEEDFE;
+          --pm-red: #A32D2D;
+          --pm-red-bg: #FCEBEB;
+          --pm-blue: #185FA5;
+          --pm-blue-bg: #E6F1FB;
+          --pm-radius-sm: 8px;
+          --pm-radius-md: 12px;
+          --pm-radius-lg: 18px;
+          --pm-shadow-card: 0 1px 3px rgba(28,26,23,0.06), 0 0 0 0.5px rgba(28,26,23,0.08);
+        }
+
+        .pm-backdrop {
+          position: fixed; inset: 0; background: rgba(28,26,23,0.35); z-index: 140;
+          display: flex; align-items: flex-start; justify-content: center; padding: 40px 20px;
+          overflow-y: auto; opacity: 0; pointer-events: none; transition: opacity 0.25s cubic-bezier(0.22,1,0.36,1);
+          font-family: 'DM Sans', sans-serif;
+        }
+        .pm-backdrop.pm-show { opacity: 1; pointer-events: auto; }
+
+        .pm-modal {
+          background: var(--pm-cream); border-radius: 20px; width: 100%; max-width: 740px;
+          box-shadow: 0 24px 80px rgba(28,26,23,0.22), 0 0 0 0.5px rgba(28,26,23,0.1);
+          overflow: hidden; position: relative;
+          transform: translateY(16px) scale(0.98); transition: all 0.25s cubic-bezier(0.22,1,0.36,1);
+        }
+        .pm-backdrop.pm-show .pm-modal { transform: translateY(0) scale(1); }
+
+        .pm-modal-header {
+          background: var(--pm-cream); padding: 28px 32px 20px; border-bottom: 0.5px solid var(--pm-border);
+          position: sticky; top: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between;
+        }
+
+        .pm-modal-header-left { display: flex; flex-direction: column; gap: 2px; }
+
+        .pm-modal-eyebrow { font-size: 10px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--pm-ink-faint); }
+
+        .pm-modal-title { font-family: 'Cormorant Garamond', serif; font-size: 28px; font-weight: 300; color: var(--pm-ink); letter-spacing: -0.02em; line-height: 1; }
+        .pm-modal-title em { font-style: italic; font-weight: 400; }
+
+        .pm-close-btn {
+          width: 34px; height: 34px; border-radius: 50%; border: 0.5px solid var(--pm-border-strong);
+          background: var(--pm-cream-card); cursor: pointer; display: flex; align-items: center; justify-content: center;
+          color: var(--pm-ink-muted); font-size: 16px; transition: background 0.15s, color 0.15s; flex-shrink: 0; outline: none;
+        }
+        .pm-close-btn:hover, .pm-close-btn:focus-visible { background: var(--pm-cream-deep); color: var(--pm-ink); }
+
+        .pm-modal-body { padding: 28px 32px 36px; display: flex; flex-direction: column; gap: 32px; }
+
+        .pm-section { display: flex; flex-direction: column; gap: 12px; }
+        .pm-section-header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+        .pm-section-meta { display: flex; flex-direction: column; gap: 3px; }
+
+        .pm-section-label { font-size: 10px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--pm-ink-faint); }
+        .pm-section-title { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-weight: 300; color: var(--pm-ink); letter-spacing: -0.01em; }
+        .pm-section-count { font-size: 11px; font-weight: 500; color: var(--pm-ink-faint); background: var(--pm-cream-deep); border: 0.5px solid var(--pm-border); border-radius: 20px; padding: 3px 10px; white-space: nowrap; }
+
+        .pm-cards-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        @media (max-width: 600px) {
+          .pm-modal-body { padding: 20px 20px 28px; }
+          .pm-modal-header { padding: 20px 20px 16px; }
+          .pm-cards-grid { grid-template-columns: 1fr; }
+        }
+
+        .pm-card {
+          background: var(--pm-cream-card); border-radius: var(--pm-radius-lg); border: 0.5px solid var(--pm-border);
+          padding: 20px; display: flex; flex-direction: column; gap: 16px; box-shadow: var(--pm-shadow-card);
+        }
+
+        .pm-card-head { display: flex; flex-direction: column; gap: 6px; }
+        .pm-card-badge { font-size: 10px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: var(--pm-ink-faint); }
+        .pm-card-title { font-family: 'Cormorant Garamond', serif; font-size: 19px; font-weight: 400; color: var(--pm-ink); letter-spacing: -0.01em; line-height: 1.2; }
+        .pm-card-desc { font-size: 12.5px; color: var(--pm-ink-muted); line-height: 1.6; }
+
+        .pm-field-label { font-size: 10px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: var(--pm-ink-faint); margin-bottom: 6px; }
+
+        .pm-input, .pm-select {
+          width: 100%; background: var(--pm-cream); border: 0.5px solid var(--pm-border-strong);
+          border-radius: var(--pm-radius-sm); padding: 9px 12px; font-family: 'DM Sans', sans-serif;
+          font-size: 13px; color: var(--pm-ink); outline: none; transition: border-color 0.15s, box-shadow 0.15s;
+          appearance: none; -webkit-appearance: none;
+        }
+        .pm-input:focus, .pm-select:focus { border-color: var(--pm-purple); box-shadow: 0 0 0 3px rgba(83,74,183,0.1); }
+        .pm-select {
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236B6760' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+          background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; cursor: pointer;
+        }
+
+        .pm-avatar-row { display: flex; align-items: center; gap: 14px; }
+        .pm-avatar {
+          width: 54px; height: 54px; border-radius: 50%; background: var(--pm-purple-bg); display: flex; align-items: center; justify-content: center;
+          font-family: 'Cormorant Garamond', serif; font-size: 20px; font-weight: 400; color: var(--pm-purple);
+          border: 1.5px solid rgba(83,74,183,0.3); flex-shrink: 0; transition: box-shadow 0.15s; cursor: pointer; position: relative; overflow: hidden;
+        }
+        .pm-avatar:hover, .pm-avatar:focus-visible { box-shadow: 0 0 0 4px rgba(83,74,183,0.12); outline: none; }
+        .pm-avatar-img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+        .pm-avatar-hint { font-size: 12px; color: var(--pm-ink-muted); line-height: 1.5; white-space: pre-wrap; }
+
+        .pm-url-row { display: flex; gap: 8px; align-items: center; }
+        .pm-url-row .pm-input { flex: 1; }
+
+        .pm-btn {
+          border: 0.5px solid var(--pm-border-strong); background: var(--pm-cream-card); border-radius: var(--pm-radius-sm);
+          padding: 9px 14px; font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 500; letter-spacing: 0.05em;
+          text-transform: uppercase; color: var(--pm-ink-muted); cursor: pointer; transition: all 0.15s; white-space: nowrap; outline: none;
+        }
+        .pm-btn:hover:not(:disabled), .pm-btn:focus-visible:not(:disabled) { background: var(--pm-cream-deep); color: var(--pm-ink); border-color: var(--pm-border-strong); }
+        .pm-btn:active:not(:disabled) { transform: scale(0.98); }
+        .pm-btn-primary { background: var(--pm-ink); color: var(--pm-cream); border-color: var(--pm-ink); }
+        .pm-btn-primary:hover:not(:disabled), .pm-btn-primary:focus-visible:not(:disabled) { background: #2d2b27; color: var(--pm-cream); }
+        .pm-btn-primary:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+        .pm-btn-full { width: 100%; text-align: center; justify-content: center; }
+
+        .pm-email-status-row {
+          display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px;
+          background: var(--pm-cream); border-radius: var(--pm-radius-sm); border: 0.5px solid var(--pm-border);
+        }
+        .pm-email-addr { font-size: 13px; color: var(--pm-ink); font-weight: 400; }
+        .pm-email-sub { font-size: 11px; color: var(--pm-ink-muted); margin-top: 2px; }
+        .pm-verified-chip {
+          font-size: 10px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; background: var(--pm-teal-bg);
+          color: var(--pm-teal); border: 0.5px solid rgba(15,110,86,0.2); border-radius: 20px; padding: 4px 10px; flex-shrink: 0;
+        }
+
+        .pm-toggle-row {
+          display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px;
+          background: var(--pm-cream); border-radius: var(--pm-radius-sm); border: 0.5px solid var(--pm-border);
+        }
+        .pm-toggle-info { flex: 1; }
+        .pm-toggle-title { font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--pm-ink-muted); }
+        .pm-toggle-sub { font-size: 12px; color: var(--pm-ink-faint); margin-top: 2px; }
+
+        .pm-toggle {
+          width: 42px; height: 24px; border-radius: 12px; background: var(--pm-cream-deep); border: 0.5px solid var(--pm-border-strong);
+          cursor: pointer; position: relative; transition: background 0.2s, border-color 0.2s; flex-shrink: 0; outline: none;
+        }
+        .pm-toggle:focus-visible { box-shadow: 0 0 0 3px rgba(83,74,183,0.1); }
+        .pm-toggle::after {
+          content: ''; position: absolute; width: 18px; height: 18px; border-radius: 50%; background: white;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.2); top: 2.5px; left: 2.5px; transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1);
+        }
+        .pm-toggle.pm-on { background: var(--pm-teal); border-color: transparent; }
+        .pm-toggle.pm-on::after { transform: translateX(18px); }
+
+        .pm-toggle-status { font-size: 10px; font-weight: 500; letter-spacing: 0.08em; min-width: 22px; text-align: center; color: var(--pm-ink-faint); transition: color 0.15s; }
+        .pm-toggle.pm-on + .pm-toggle-status { color: var(--pm-teal); }
+
+        .pm-pw-strength-bar { height: 3px; background: var(--pm-cream-deep); border-radius: 2px; overflow: hidden; margin-top: 4px; }
+        .pm-pw-strength-fill { height: 100%; border-radius: 2px; transition: width 0.3s, background 0.3s; }
+        .pm-pw-strength-label { font-size: 11px; color: var(--pm-ink-faint); margin-top: 4px; min-height: 16px; transition: color 0.3s; }
+        .pm-match-indicator { font-size: 11px; margin-top: 4px; min-height: 16px; transition: color 0.3s; }
+
+        .pm-tfa-badge-row { display: flex; gap: 8px; flex-wrap: wrap; }
+        .pm-method-chip {
+          font-size: 11px; font-weight: 500; padding: 5px 12px; border-radius: 20px; border: 0.5px solid var(--pm-border-strong);
+          background: var(--pm-cream); color: var(--pm-ink-muted); cursor: pointer; transition: all 0.15s; outline: none;
+        }
+        .pm-method-chip:focus-visible { box-shadow: 0 0 0 3px rgba(83,74,183,0.1); }
+        .pm-method-chip.pm-active { background: var(--pm-purple-bg); color: var(--pm-purple); border-color: rgba(83,74,183,0.3); }
+
+        .pm-logout-card { background: var(--pm-cream-card); border-radius: var(--pm-radius-lg); border: 0.5px solid var(--pm-border); padding: 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; box-shadow: var(--pm-shadow-card); }
+        @media (max-width: 480px) { .pm-logout-card { flex-direction: column; align-items: flex-start; } .pm-btn-logout { width: 100%; text-align: center; } }
+        .pm-logout-meta { display: flex; flex-direction: column; gap: 4px; }
+        .pm-logout-title { font-family: 'Cormorant Garamond', serif; font-size: 19px; font-weight: 400; color: var(--pm-ink); }
+        .pm-logout-sub { font-size: 12.5px; color: var(--pm-ink-muted); line-height: 1.5; }
+        .pm-btn-logout {
+          border: 0.5px solid rgba(163,45,45,0.3); background: var(--pm-red-bg); color: var(--pm-red); font-size: 12px; font-weight: 500;
+          letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 18px; border-radius: var(--pm-radius-sm); cursor: pointer;
+          transition: all 0.15s; white-space: nowrap; font-family: 'DM Sans', sans-serif; outline: none;
+        }
+        .pm-btn-logout:hover, .pm-btn-logout:focus-visible { background: #f7c1c1; border-color: rgba(163,45,45,0.5); }
+        .pm-btn-logout:active { transform: scale(0.98); }
+      `}</style>
+      
+      <div className={`pm-root pm-backdrop ${isVisible ? 'pm-show' : ''}`} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+        <div className="pm-modal" ref={panelRef} role="dialog" aria-labelledby={titleId} aria-modal="true">
+          
+          <div className="pm-modal-header">
+            <div className="pm-modal-header-left">
+              <span className="pm-modal-eyebrow">Dashboard Profile</span>
+              <h1 id={titleId} className="pm-modal-title"><em>{firstName}</em> {lastName}</h1>
             </div>
-
-            <button
-              type="button"
-              onClick={onClose}
-              className="absolute right-0 top-1/2 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-[rgba(191,194,202,0.92)] bg-[rgba(255,255,255,0.84)] text-[22px] leading-none text-[#656971] transition-colors duration-200 hover:bg-[rgba(246,247,250,0.98)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dashboard-modal-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[rgba(244,245,248,0.98)]"
-              aria-label="Close profile dialog"
-            >
-              ×
-            </button>
+            <button ref={closeBtnRef} className="pm-close-btn" onClick={onClose} aria-label="Close">&#x2715;</button>
           </div>
-        </div>
 
-        <div className="dashboard-modal-scroll flex-1 overflow-y-auto px-5 py-5 md:px-8 md:py-6">
-          <div className="space-y-6">
-            <section aria-labelledby={`${titleId}-info`} className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8a8f98]">
-                    Profile Information
-                  </p>
-                  <h3
-                    id={`${titleId}-info`}
-                    className="mt-1 text-[20px] font-medium tracking-[0.02em] text-[#5b5f67]"
-                  >
-                    Identity and visibility
-                  </h3>
+          <div className="pm-modal-body">
+            
+            <div className="pm-section">
+              <div className="pm-section-header">
+                <div className="pm-section-meta">
+                  <span className="pm-section-label">Profile Information</span>
+                  <h2 className="pm-section-title">Identity and visibility</h2>
                 </div>
-                <span className="rounded-full border border-[rgba(191,194,202,0.92)] bg-[rgba(255,255,255,0.78)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#767b86]">
-                  2 options
-                </span>
+                <span className="pm-section-count">2 options</span>
               </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <SectionCard
-                  eyebrow="Profile Option 1"
-                  title="Profile photo switch"
-                  description="Preview the current avatar and switch between initials or an image URL."
-                >
-                  <div className="flex items-center gap-4">
-                    <div
-                      className={`grid h-[76px] w-[76px] shrink-0 place-items-center rounded-[24px] border border-[rgba(211,213,221,0.92)] bg-[radial-gradient(circle_at_30%_25%,#f2f2f2_0%,#dbdbdb_76%)] bg-cover bg-center text-[22px] font-semibold uppercase tracking-[0.08em] text-[#70747c] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] ${
-                        profile.avatarMode === "url" && isValidImageUrl(profile.avatarUrl)
-                          ? "text-transparent"
-                          : ""
-                      }`}
-                      style={avatarPreviewStyle}
-                      aria-hidden="true"
-                    >
-                      {profile.avatarMode === "url" && isValidImageUrl(profile.avatarUrl)
-                        ? "."
-                        : fallbackInitials}
-                    </div>
-
-                    <div className="grid flex-1 gap-2">
-                      <button
-                        ref={firstActionRef}
-                        type="button"
-                        onClick={() =>
-                          onUpdateProfile({
-                            avatarMode: profile.avatarMode === "placeholder" ? "url" : "placeholder",
-                          })
-                        }
-                        className="inline-flex h-9 items-center justify-center rounded-full border border-[rgba(191,194,202,0.92)] bg-[rgba(255,255,255,0.84)] px-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#62666e] transition-colors duration-200 hover:bg-[rgba(246,247,250,0.98)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dashboard-modal-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[rgba(244,245,248,0.98)]"
-                      >
-                        {profile.avatarMode === "placeholder" ? "Use image URL" : "Use initials"}
-                      </button>
-                      <p className="text-[12px] leading-5 text-[#7a7e87]">
-                        {profile.avatarMode === "placeholder"
-                          ? "The dashboard keeps a simple initials badge until you switch sources."
-                          : "Paste an image URL to preview a custom photo on this device."}
-                      </p>
-                    </div>
+              <div className="pm-cards-grid">
+                
+                <div className="pm-card">
+                  <div className="pm-card-head">
+                    <span className="pm-card-badge">Avatar</span>
+                    <h3 className="pm-card-title">Profile photo</h3>
+                    <p className="pm-card-desc">Use initials or switch to a custom image URL for your avatar.</p>
                   </div>
-
-                  {profile.avatarMode === "url" ? (
-                    <label className="mt-4 grid gap-1.5">
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8a8f98]">
-                        Image URL
-                      </span>
-                      <input
-                        value={profile.avatarUrl}
-                        onChange={(event) => onUpdateProfile({ avatarUrl: event.target.value })}
-                        placeholder="https://images.example.com/profile.jpg"
-                        className="h-11 rounded-[16px] border border-[rgba(211,213,221,0.92)] bg-[rgba(255,255,255,0.88)] px-4 text-[13px] text-[#5f6269] outline-none transition-colors duration-200 focus:border-[rgba(118,123,134,0.54)] focus-visible:ring-2 focus-visible:ring-[var(--dashboard-modal-ring)]"
-                      />
-                    </label>
-                  ) : null}
-                </SectionCard>
-
-                <SectionCard
-                  eyebrow="Profile Option 2"
-                  title="Email verification and visibility"
-                  description="Control how your email appears in the dashboard and verify it locally for this mock flow."
-                >
-                  <div className="flex flex-col gap-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8a8f98]">
-                          Current email
-                        </p>
-                        <p className="mt-2 text-[15px] font-medium text-[#5f6269]">
-                          {displayedEmail}
-                        </p>
-                        <p className="mt-1 text-[12px] text-[#7a7e87]">
-                          {profile.emailVerified ? "Status: verified" : "Status: not verified"}
-                        </p>
-                      </div>
-
-                      {emailVerifyStep === "idle" && (
-                        <button
-                          type="button"
-                          onClick={onSendEmailOtp}
-                          disabled={profile.emailVerified || isEmailVerifying}
-                          className="inline-flex h-9 items-center justify-center rounded-full border border-[rgba(191,194,202,0.92)] bg-[rgba(255,255,255,0.84)] px-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#62666e] transition-colors duration-200 hover:bg-[rgba(246,247,250,0.98)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dashboard-modal-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[rgba(244,245,248,0.98)] disabled:cursor-default disabled:border-[rgba(111,142,163,0.38)] disabled:bg-[rgba(111,142,163,0.16)] disabled:text-[#617b8c]"
-                        >
-                          {profile.emailVerified ? "Verified" : isEmailVerifying ? "Sending..." : "Verify"}
-                        </button>
+                  <div className="pm-avatar-row">
+                    <div 
+                      className="pm-avatar" 
+                      onClick={() => onUpdateProfile({ avatarMode: profile.avatarMode === "url" ? "placeholder" : "url" })}
+                      title={profile.avatarMode === "url" ? "Switch to Initials" : "Switch to Custom Image"}
+                      tabIndex={0}
+                      role="button"
+                      onKeyDown={(e) => { if(e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onUpdateProfile({ avatarMode: profile.avatarMode === "url" ? "placeholder" : "url" }); }}}
+                    >
+                      {profile.avatarMode === "url" && isValidImageUrl(profile.avatarUrl) ? (
+                        <img src={profile.avatarUrl} className="pm-avatar-img" alt="Profile photo" />
+                      ) : (
+                        <span>{fallbackInitials}</span>
                       )}
                     </div>
-                    
-                    {emailVerifyStep === "otp" && (
-                      <div className="mt-2 rounded-[12px] border border-blue-200 bg-blue-50/50 p-4">
-                        <p className="mb-3 text-[12px] text-blue-800">
-                          We sent a 6-digit code to your email. Enter it below to verify.
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            maxLength={6}
-                            placeholder="123456"
+                    <span className="pm-avatar-hint">
+                      {profile.avatarMode === "url" && isValidImageUrl(profile.avatarUrl) 
+                        ? "Showing image avatar." 
+                        : "Showing initials badge.\nSwitch to an image below."}
+                    </span>
+                  </div>
+                  <div>
+                    <div className="pm-field-label">Image URL</div>
+                    <div className="pm-url-row">
+                      <input 
+                        type="url" 
+                        className="pm-input" 
+                        placeholder="https://example.com/photo.jpg" 
+                        value={imgUrlInput}
+                        onChange={(e) => setImgUrlInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && applyImage()}
+                      />
+                      <button className="pm-btn pm-btn-primary" onClick={applyImage}>Apply</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pm-card">
+                  <div className="pm-card-head">
+                    <span className="pm-card-badge">Email</span>
+                    <h3 className="pm-card-title">Verification and visibility</h3>
+                    <p className="pm-card-desc">Control how your email appears and verify it for this session.</p>
+                  </div>
+                  <div>
+                    <div className="pm-field-label">Current email</div>
+                    <div className="pm-email-status-row">
+                      <div>
+                        <div className="pm-email-addr">{displayedEmail}</div>
+                        <div className="pm-email-sub">Status: {profile.emailVerified ? "verified" : "unverified"}</div>
+                      </div>
+                      {profile.emailVerified ? (
+                        <span className="pm-verified-chip">Verified</span>
+                      ) : emailVerifyStep === "idle" ? (
+                        <button className="pm-btn pm-btn-primary" onClick={onSendEmailOtp} disabled={isEmailVerifying} style={{ padding: '4px 10px', fontSize: '10px' }}>
+                          {isEmailVerifying ? "Sending..." : "Verify"}
+                        </button>
+                      ) : null}
+                    </div>
+                    {emailVerifyStep === "otp" && !profile.emailVerified && (
+                      <div style={{ marginTop: '8px', padding: '10px', background: 'var(--pm-cream)', border: '0.5px solid var(--pm-border)', borderRadius: 'var(--pm-radius-sm)' }}>
+                        <div className="pm-field-label">Enter 6-digit code</div>
+                        <div className="pm-url-row">
+                          <input 
+                            type="text" 
+                            className="pm-input" 
+                            maxLength={6} 
+                            placeholder="123456" 
                             value={emailOtpForm}
                             onChange={(e) => onUpdateEmailOtp?.(e.target.value)}
-                            className="h-9 w-32 rounded-[8px] border border-blue-200 bg-white px-3 text-[13px] tracking-widest text-[#5f6269] outline-none transition-colors duration-200 focus:border-blue-400 focus-visible:ring-2 focus-visible:ring-blue-400/20"
                           />
-                          <button
-                            type="button"
-                            onClick={onConfirmEmailOtp}
-                            disabled={emailOtpForm.length !== 6 || isEmailVerifying}
-                            className="inline-flex h-9 items-center justify-center rounded-[8px] bg-blue-600 px-4 text-[12px] font-medium text-white transition-colors duration-200 hover:bg-blue-700 disabled:opacity-50"
-                          >
-                            {isEmailVerifying ? "Confirming..." : "Confirm"}
+                          <button className="pm-btn pm-btn-primary" onClick={onConfirmEmailOtp} disabled={emailOtpForm.length !== 6 || isEmailVerifying}>
+                            {isEmailVerifying ? "..." : "Confirm"}
                           </button>
                         </div>
-                        {emailVerifyError && (
-                          <p className="mt-2 text-[12px] font-medium text-red-500">
-                            {emailVerifyError}
-                          </p>
-                        )}
+                        {emailVerifyError && <div style={{ color: 'var(--pm-red)', fontSize: '11px', marginTop: '6px' }}>{emailVerifyError}</div>}
                       </div>
                     )}
                   </div>
-
-                  <div className="mt-4 flex items-center justify-between gap-3 rounded-[18px] border border-[rgba(211,213,221,0.82)] bg-[rgba(246,247,250,0.74)] px-4 py-3">
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#747983]">
-                        Show email
-                      </p>
-                      <p className="mt-1 text-[12px] text-[#7a7e87]">
-                        Switch between full visibility and a masked address preview.
-                      </p>
+                  <div className="pm-toggle-row" style={{ marginTop: 'auto' }}>
+                    <div className="pm-toggle-info">
+                      <div className="pm-toggle-title">Show email</div>
+                      <div className="pm-toggle-sub">{profile.showEmail ? "Full address visible" : "Address is masked"}</div>
                     </div>
-                    <Toggle
-                      checked={profile.showEmail}
-                      label={profile.showEmail ? "Hide email address" : "Show email address"}
-                      onChange={(checked) => onUpdateProfile({ showEmail: checked })}
-                    />
+                    <button 
+                      className={`pm-toggle ${profile.showEmail ? 'pm-on' : ''}`} 
+                      onClick={() => onUpdateProfile({ showEmail: !profile.showEmail })}
+                      aria-label="Toggle email visibility"
+                    ></button>
+                    <span className="pm-toggle-status">{profile.showEmail ? 'ON' : 'OFF'}</span>
                   </div>
-                </SectionCard>
-              </div>
-            </section>
-
-            <section aria-labelledby={`${titleId}-preferences`} className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8a8f98]">
-                    Preferences
-                  </p>
-                  <h3
-                    id={`${titleId}-preferences`}
-                    className="mt-1 text-[20px] font-medium tracking-[0.02em] text-[#5b5f67]"
-                  >
-                    Personal settings
-                  </h3>
                 </div>
-                <span className="rounded-full border border-[rgba(191,194,202,0.92)] bg-[rgba(255,255,255,0.78)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#767b86]">
-                  2 options
-                </span>
-              </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <SectionCard
-                  eyebrow="Profile Option 3"
-                  title="Timezone"
-                  description="Choose the timezone used when the dashboard reflects your local working context."
-                >
-                  <label className="grid gap-1.5">
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8a8f98]">
-                      Selected timezone
-                    </span>
-                    <select
+              </div>
+            </div>
+
+            <div className="pm-section">
+              <div className="pm-section-header">
+                <div className="pm-section-meta">
+                  <span className="pm-section-label">Preferences</span>
+                  <h2 className="pm-section-title">Personal settings</h2>
+                </div>
+                <span className="pm-section-count">2 options</span>
+              </div>
+              <div className="pm-cards-grid">
+                
+                <div className="pm-card">
+                  <div className="pm-card-head">
+                    <span className="pm-card-badge">Timezone</span>
+                    <h3 className="pm-card-title">Local time context</h3>
+                    <p className="pm-card-desc">Choose the timezone for dashboard timestamps and reminders.</p>
+                  </div>
+                  <div>
+                    <div className="pm-field-label">Selected timezone</div>
+                    <select 
+                      className="pm-select"
                       value={profile.timezone}
-                      onChange={(event) => onUpdateProfile({ timezone: event.target.value })}
-                      className="h-11 rounded-[16px] border border-[rgba(211,213,221,0.92)] bg-[rgba(255,255,255,0.88)] px-4 text-[13px] text-[#5f6269] outline-none transition-colors duration-200 focus:border-[rgba(118,123,134,0.54)] focus-visible:ring-2 focus-visible:ring-[var(--dashboard-modal-ring)]"
+                      onChange={(e) => onUpdateProfile({ timezone: e.target.value })}
                     >
-                      {TIMEZONE_OPTIONS.map((zone) => (
-                        <option key={zone} value={zone}>
-                          {zone}
-                        </option>
+                      {TIMEZONE_OPTIONS.map((tz) => (
+                        <option key={tz.value} value={tz.value}>{tz.label}</option>
                       ))}
                     </select>
-                  </label>
-                </SectionCard>
-
-                <SectionCard
-                  eyebrow="Profile Option 4"
-                  title="Email notifications"
-                  description="Decide whether dashboard updates and reminders should appear as email notifications."
-                >
-                  <div className="flex items-center justify-between gap-3 rounded-[18px] border border-[rgba(211,213,221,0.82)] bg-[rgba(246,247,250,0.74)] px-4 py-3">
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#747983]">
-                        Notification status
-                      </p>
-                      <p className="mt-1 text-[12px] text-[#7a7e87]">
-                        {profile.emailNotifications ? "Inbox updates are enabled." : "Inbox updates are paused."}
-                      </p>
-                    </div>
-                    <Toggle
-                      checked={profile.emailNotifications}
-                      label={profile.emailNotifications ? "Disable email notifications" : "Enable email notifications"}
-                      onChange={(checked) => onUpdateProfile({ emailNotifications: checked })}
-                    />
                   </div>
-                </SectionCard>
-              </div>
-            </section>
-
-            <section aria-labelledby={`${titleId}-security`} className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8a8f98]">
-                    Security
-                  </p>
-                  <h3
-                    id={`${titleId}-security`}
-                    className="mt-1 text-[20px] font-medium tracking-[0.02em] text-[#5b5f67]"
-                  >
-                    Access controls
-                  </h3>
                 </div>
-                <span className="rounded-full border border-[rgba(191,194,202,0.92)] bg-[rgba(255,255,255,0.78)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#767b86]">
-                  2 options
-                </span>
-              </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <SectionCard
-                  eyebrow="Profile Option 5"
-                  title="Password change"
-                  description="Use client-side validation for a mock password update without touching backend credentials."
-                >
-                  <div className="grid gap-3">
-                    <label className="grid gap-1.5">
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8a8f98]">
-                        Current password
-                      </span>
-                      <input
-                        type="password"
-                        name="current-pw-no-autofill"
-                        autoComplete="new-password"
-                        value={passwordForm.currentPassword}
-                        onChange={(event) => onUpdatePassword("currentPassword", event.target.value)}
-                        className="h-11 rounded-[16px] border border-[rgba(211,213,221,0.92)] bg-[rgba(255,255,255,0.88)] px-4 text-[13px] text-[#5f6269] outline-none transition-colors duration-200 focus:border-[rgba(118,123,134,0.54)] focus-visible:ring-2 focus-visible:ring-[var(--dashboard-modal-ring)]"
-                      />
-                    </label>
-                    <label className="grid gap-1.5">
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8a8f98]">
-                        New password
-                      </span>
-                      <input
-                        type="password"
-                        name="new-pw-no-autofill"
-                        autoComplete="new-password"
-                        value={passwordForm.newPassword}
-                        onChange={(event) => onUpdatePassword("newPassword", event.target.value)}
-                        className="h-11 rounded-[16px] border border-[rgba(211,213,221,0.92)] bg-[rgba(255,255,255,0.88)] px-4 text-[13px] text-[#5f6269] outline-none transition-colors duration-200 focus:border-[rgba(118,123,134,0.54)] focus-visible:ring-2 focus-visible:ring-[var(--dashboard-modal-ring)]"
-                      />
-                    </label>
-                    <label className="grid gap-1.5">
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8a8f98]">
-                        Confirm password
-                      </span>
-                      <input
-                        type="password"
-                        name="confirm-pw-no-autofill"
-                        autoComplete="new-password"
-                        value={passwordForm.confirmPassword}
-                        onChange={(event) => onUpdatePassword("confirmPassword", event.target.value)}
-                        className="h-11 rounded-[16px] border border-[rgba(211,213,221,0.92)] bg-[rgba(255,255,255,0.88)] px-4 text-[13px] text-[#5f6269] outline-none transition-colors duration-200 focus:border-[rgba(118,123,134,0.54)] focus-visible:ring-2 focus-visible:ring-[var(--dashboard-modal-ring)]"
-                      />
-                    </label>
-                    {passwordError ? (
-                      <p className="rounded-[14px] border border-[rgba(217,100,100,0.28)] bg-[rgba(217,100,100,0.08)] px-3 py-2 text-[12px] text-[#a25454]">
-                        {passwordError}
-                      </p>
-                    ) : null}
-                    {passwordSuccess ? (
-                      <p className="rounded-[14px] border border-[rgba(111,142,163,0.26)] bg-[rgba(111,142,163,0.1)] px-3 py-2 text-[12px] text-[#5e7588]">
-                        {passwordSuccess}
-                      </p>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={onSavePassword}
-                      disabled={isPasswordLoading || !passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword || passwordForm.newPassword !== passwordForm.confirmPassword}
-                      className="inline-flex h-10 items-center justify-center rounded-full border border-[rgba(111,142,163,0.34)] bg-[rgba(111,142,163,0.14)] px-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5e7588] transition-colors duration-200 hover:bg-[rgba(111,142,163,0.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dashboard-modal-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[rgba(244,245,248,0.98)] disabled:opacity-50"
-                    >
-                      {isPasswordLoading ? "Saving..." : "Update password"}
-                    </button>
+                <div className="pm-card">
+                  <div className="pm-card-head">
+                    <span className="pm-card-badge">Notifications</span>
+                    <h3 className="pm-card-title">Email notifications</h3>
+                    <p className="pm-card-desc">Decide whether updates and reminders arrive in your inbox.</p>
                   </div>
-                </SectionCard>
-
-                <SectionCard
-                  eyebrow="Profile Option 6"
-                  title="Two-factor auth"
-                  description="Enable a local mock two-factor state and choose the preferred verification method."
-                >
-                  <div className="flex items-center justify-between gap-3 rounded-[18px] border border-[rgba(211,213,221,0.82)] bg-[rgba(246,247,250,0.74)] px-4 py-3">
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#747983]">
-                        Protection
-                      </p>
-                      <p className="mt-1 text-[12px] text-[#7a7e87]">
-                        {profile.twoFactorEnabled ? "Secondary verification is enabled." : "Secondary verification is disabled."}
-                      </p>
+                  <div className="pm-toggle-row" style={{ marginTop: 'auto' }}>
+                    <div className="pm-toggle-info">
+                      <div className="pm-toggle-title">Notification status</div>
+                      <div className="pm-toggle-sub">{profile.emailNotifications ? "Inbox updates are enabled" : "Notifications are paused"}</div>
                     </div>
-                    <Toggle
-                      checked={profile.twoFactorEnabled}
-                      label={profile.twoFactorEnabled ? "Disable two-factor authentication" : "Enable two-factor authentication"}
-                      disabled={isUpdating2FA}
-                      onChange={(checked) => onUpdateProfile({ twoFactorEnabled: checked })}
+                    <button 
+                      className={`pm-toggle ${profile.emailNotifications ? 'pm-on' : ''}`} 
+                      onClick={() => onUpdateProfile({ emailNotifications: !profile.emailNotifications })}
+                      aria-label="Toggle notifications"
+                    ></button>
+                    <span className="pm-toggle-status">{profile.emailNotifications ? 'ON' : 'OFF'}</span>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <div className="pm-section">
+              <div className="pm-section-header">
+                <div className="pm-section-meta">
+                  <span className="pm-section-label">Security</span>
+                  <h2 className="pm-section-title">Access controls</h2>
+                </div>
+                <span className="pm-section-count">2 options</span>
+              </div>
+              <div className="pm-cards-grid">
+                
+                <div className="pm-card">
+                  <div className="pm-card-head">
+                    <span className="pm-card-badge">Password</span>
+                    <h3 className="pm-card-title">Password change</h3>
+                    <p className="pm-card-desc">Update your credentials with client-side validation.</p>
+                  </div>
+                  <div>
+                    <div className="pm-field-label">Current password</div>
+                    <input 
+                      type="password" 
+                      className="pm-input" 
+                      placeholder="Enter current password" 
+                      value={passwordForm.currentPassword}
+                      onChange={(e) => onUpdatePassword("currentPassword", e.target.value)}
                     />
                   </div>
+                  <div>
+                    <div className="pm-field-label">New password</div>
+                    <input 
+                      type="password" 
+                      className="pm-input" 
+                      placeholder="Min. 8 characters" 
+                      value={passwordForm.newPassword}
+                      onChange={(e) => onUpdatePassword("newPassword", e.target.value)}
+                    />
+                    <div className="pm-pw-strength-bar"><div className="pm-pw-strength-fill" style={{ width: `${pwStrength.pct}%`, background: pwStrength.color }}></div></div>
+                    <div className="pm-pw-strength-label" style={{ color: pwStrength.color }}>{passwordForm.newPassword ? pwStrength.label : ''}</div>
+                  </div>
+                  <div>
+                    <div className="pm-field-label">Confirm password</div>
+                    <input 
+                      type="password" 
+                      className="pm-input" 
+                      placeholder="Repeat new password" 
+                      value={passwordForm.confirmPassword}
+                      onChange={(e) => onUpdatePassword("confirmPassword", e.target.value)}
+                    />
+                    <div className="pm-match-indicator" style={{ color: pwMatch === true ? 'var(--pm-teal)' : pwMatch === false ? 'var(--pm-red)' : '' }}>
+                      {pwMatch === true ? 'Passwords match' : pwMatch === false ? 'Passwords do not match' : ''}
+                    </div>
+                  </div>
+                  {passwordError && <div style={{ color: 'var(--pm-red)', fontSize: '11px', textAlign: 'center' }}>{passwordError}</div>}
+                  {passwordSuccess && <div style={{ color: 'var(--pm-teal)', fontSize: '11px', textAlign: 'center' }}>{passwordSuccess}</div>}
+                  <button 
+                    className="pm-btn pm-btn-primary pm-btn-full" 
+                    onClick={onSavePassword} 
+                    disabled={!canSavePassword}
+                  >
+                    {isPasswordLoading ? "Updating..." : "Update password"}
+                  </button>
+                </div>
 
-                  <label className="mt-4 grid gap-1.5">
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8a8f98]">
-                      Method
-                    </span>
-                    <select
-                      value={profile.twoFactorMethod}
-                      onChange={(event) =>
-                        onUpdateProfile({
-                          twoFactorMethod: event.target.value as ProfileSettings["twoFactorMethod"],
-                        })
-                      }
-                      disabled={!profile.twoFactorEnabled}
-                      className="h-11 rounded-[16px] border border-[rgba(211,213,221,0.92)] bg-[rgba(255,255,255,0.88)] px-4 text-[13px] text-[#5f6269] outline-none transition-colors duration-200 focus:border-[rgba(118,123,134,0.54)] focus-visible:ring-2 focus-visible:ring-[var(--dashboard-modal-ring)] disabled:cursor-not-allowed disabled:opacity-55"
-                    >
-                      <option value="authenticator">Authenticator App</option>
-                      <option value="sms">SMS</option>
-                    </select>
-                  </label>
-                </SectionCard>
+                <div className="pm-card">
+                  <div className="pm-card-head">
+                    <span className="pm-card-badge">2FA</span>
+                    <h3 className="pm-card-title">Two-factor auth</h3>
+                    <p className="pm-card-desc">Add a second layer of verification to your account.</p>
+                  </div>
+                  <div className="pm-toggle-row">
+                    <div className="pm-toggle-info">
+                      <div className="pm-toggle-title">Protection</div>
+                      <div className="pm-toggle-sub">{profile.twoFactorEnabled ? "Secondary verification is enabled" : "Secondary verification is disabled"}</div>
+                    </div>
+                    <button 
+                      className={`pm-toggle ${profile.twoFactorEnabled ? 'pm-on' : ''}`} 
+                      onClick={() => !isUpdating2FA && onUpdateProfile({ twoFactorEnabled: !profile.twoFactorEnabled })}
+                      disabled={isUpdating2FA}
+                      style={{ opacity: isUpdating2FA ? 0.5 : 1 }}
+                      aria-label="Toggle 2FA"
+                    ></button>
+                    <span className="pm-toggle-status">{profile.twoFactorEnabled ? 'ON' : 'OFF'}</span>
+                  </div>
+                  <div style={{ opacity: profile.twoFactorEnabled ? 1 : 0.35, pointerEvents: profile.twoFactorEnabled ? 'auto' : 'none', transition: 'opacity 0.2s', marginTop: 'auto' }}>
+                    <div className="pm-field-label">Method</div>
+                    <div className="pm-tfa-badge-row">
+                      {(["authenticator", "sms", "email"] as const).map(method => (
+                        <button 
+                          key={method}
+                          className={`pm-method-chip ${profile.twoFactorMethod === method ? 'pm-active' : ''}`} 
+                          onClick={() => onUpdateProfile({ twoFactorMethod: method })}
+                        >
+                          {method === 'authenticator' ? 'Authenticator App' : method === 'sms' ? 'SMS' : 'Email'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
               </div>
-            </section>
+            </div>
 
-            <section aria-labelledby={`${titleId}-session`} className="space-y-3">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8a8f98]">
-                  Session
-                </p>
-                <h3
-                  id={`${titleId}-session`}
-                  className="mt-1 text-[20px] font-medium tracking-[0.02em] text-[#5b5f67]"
-                >
-                  Sign out
-                </h3>
+            <div className="pm-section">
+              <div className="pm-section-header" style={{ marginBottom: '-4px' }}>
+                <div className="pm-section-meta">
+                  <span className="pm-section-label">Session</span>
+                  <h2 className="pm-section-title">Sign out</h2>
+                </div>
               </div>
+              <div className="pm-logout-card">
+                <div className="pm-logout-meta">
+                  <h3 className="pm-logout-title">End this session</h3>
+                  <p className="pm-logout-sub">You will be returned to the login screen. Unsaved changes may be lost.</p>
+                </div>
+                <button className="pm-btn-logout" onClick={onLogout}>Log out</button>
+              </div>
+            </div>
 
-              <button
-                type="button"
-                onClick={onLogout}
-                className="inline-flex h-14 w-full items-center justify-center rounded-[22px] border border-[rgba(191,194,202,0.92)] bg-[rgba(255,255,255,0.82)] px-6 text-[13px] font-semibold uppercase tracking-[0.18em] text-[#5f636b] shadow-[0_10px_20px_rgba(57,53,49,0.06)] transition-[background-color,border-color,transform] duration-200 hover:bg-[rgba(246,247,250,0.98)] active:translate-y-[1px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dashboard-modal-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[rgba(244,245,248,0.98)]"
-              >
-                Log Out
-              </button>
-            </section>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
