@@ -216,22 +216,8 @@ export default function DashboardPolished() {
   const [toast, setToast] = useState("");
   const [pendingWorkspaceIds, setPendingWorkspaceIds] = useState<Set<string>>(new Set());
 
-  // Quick Notes state (client-side only, persisted via localStorage)
+  // Quick Notes state (session-only, not persisted)
   const [quickNotes, setQuickNotes] = useState<QuickNote[]>([]);
-  const quickNotesLoaded = useRef(false);
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("noteslite-quick-notes");
-      if (stored) setQuickNotes(JSON.parse(stored));
-    } catch {}
-    quickNotesLoaded.current = true;
-  }, []);
-
-  useEffect(() => {
-    if (!quickNotesLoaded.current) return;
-    try { localStorage.setItem("noteslite-quick-notes", JSON.stringify(quickNotes)); } catch {}
-  }, [quickNotes]);
 
   const pinnedNotes = useMemo(() => quickNotes.filter((n) => n.pinned), [quickNotes]);
 
