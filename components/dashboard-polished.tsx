@@ -872,7 +872,7 @@ export default function DashboardPolished() {
                 ) : null}
               </div>
 
-              <div className="devices-row" title="3 devices synced">
+              <div className="devices-row" title={`${sessions.length} devices synced`}>
                 <div className="sync-wave">
                   <div className="sw" />
                   <div className="sw" />
@@ -881,9 +881,28 @@ export default function DashboardPolished() {
                   <div className="sw" />
                 </div>
                 <div className="devices-sep" />
-                <div className="device-icon synced" title="MacBook Pro - Active">💻</div>
-                <div className="device-icon synced" title="iPhone - Synced">📱</div>
-                <div className="device-icon" title="iPad - Last synced 2h ago" style={{ opacity: 0.5 }}>⬜</div>
+                {sessions.slice(0, 3).map((s) => {
+                  const isDesktop = /windows|mac|linux/i.test(s.os);
+                  const isTablet = /ipad/i.test(s.deviceName);
+                  const icon = isTablet ? "⬜" : isDesktop ? "💻" : "📱";
+                  
+                  const timeDiff = Date.now() - new Date(s.lastActiveAt).getTime();
+                  const minutesAgo = Math.floor(timeDiff / 60000);
+                  const isActiveNow = s.isCurrent || minutesAgo < 5;
+                  const status = isActiveNow ? "Active" : minutesAgo < 10 ? "Synced" : `Last synced ${minutesAgo > 60 ? Math.floor(minutesAgo / 60) + "h" : minutesAgo + "m"} ago`;
+                  const isIdle = !isActiveNow && minutesAgo >= 10;
+
+                  return (
+                    <div 
+                      key={s.id} 
+                      className={`device-icon ${!isIdle ? "synced" : ""}`} 
+                      title={`${s.deviceName} - ${status}`}
+                      style={isIdle ? { opacity: 0.5 } : {}}
+                    >
+                      {icon}
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="search-bar">
@@ -986,7 +1005,7 @@ export default function DashboardPolished() {
                   <div className="stat-card">
                     <div className="stat-accent" style={{ background: "linear-gradient(90deg,#A06878,#C08898)" }} />
                     <div className="stat-label">Devices Synced</div>
-                    <div className="stat-value">3</div>
+                    <div className="stat-value">{isLoadingSessions ? "-" : sessions.length}</div>
                     <div className="stat-sub">Last sync: now</div>
                     <div className="stat-glyph">📱</div>
                   </div>
@@ -1097,10 +1116,9 @@ export default function DashboardPolished() {
                         const timeDiff = Date.now() - new Date(s.lastActiveAt).getTime();
                         const minutesAgo = Math.floor(timeDiff / 60000);
                         const hoursAgo = Math.floor(timeDiff / 3600000);
-                        const timeLabel = s.isCurrent
+                        const isActiveNow = s.isCurrent || minutesAgo < 5;
+                        const timeLabel = isActiveNow
                           ? "Active now"
-                          : minutesAgo < 1
-                          ? "Just now"
                           : minutesAgo < 60
                           ? `${minutesAgo}m ago`
                           : hoursAgo < 24
@@ -1115,11 +1133,11 @@ export default function DashboardPolished() {
                           <div
                             className="device-item"
                             key={s.id}
-                            style={{ opacity: s.isCurrent ? 1 : 0.8 }}
+                            style={{ opacity: isActiveNow ? 1 : 0.8 }}
                           >
                             <div className="device-item-icon">
                               {icon}
-                              {s.isCurrent && (
+                              {isActiveNow && (
                                 <div
                                   className="device-active-dot"
                                   style={{ background: "#5A8A6A" }}
@@ -1135,14 +1153,14 @@ export default function DashboardPolished() {
                                 <div
                                   className="di-sync-fill"
                                   style={{
-                                    width: s.isCurrent ? "100%" : minutesAgo < 5 ? "95%" : "60%",
-                                    ...(s.isCurrent ? {} : minutesAgo > 60 ? { opacity: 0.4, animation: "none" } : {}),
+                                    width: isActiveNow ? "100%" : minutesAgo < 10 ? "95%" : "60%",
+                                    ...(isActiveNow ? {} : minutesAgo > 60 ? { opacity: 0.4, animation: "none" } : {}),
                                   }}
                                 />
                               </div>
                             </div>
-                            <div className={`di-badge ${s.isCurrent ? "current" : minutesAgo < 10 ? "synced" : "offline"}`}>
-                              {s.isCurrent ? "Current" : minutesAgo < 10 ? "Synced" : "Idle"}
+                            <div className={`di-badge ${s.isCurrent ? "current" : isActiveNow ? "current" : minutesAgo < 10 ? "synced" : "offline"}`}>
+                              {s.isCurrent ? "Current" : isActiveNow ? "Active" : minutesAgo < 10 ? "Synced" : "Idle"}
                             </div>
                           </div>
                         );
