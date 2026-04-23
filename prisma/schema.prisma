@@ -25,8 +25,13 @@ model User {
   twoFactorEnabled  Boolean     @default(false) @map("two_factor_enabled")
   twoFactorMethod   String?     @default("authenticator") @map("two_factor_method")
 
+  avatarMode        String?     @default("initials") @map("avatar_mode")
+  avatarUrl         String?     @map("avatar_url")
+  displayName       String?     @map("display_name")
+  showEmail         Boolean     @default(true) @map("show_email")
+
   sessions          Session[]
-  
+  quickNotes        QuickNote[]
   workspaces        Workspace[]
 
   @@map("users")
@@ -134,4 +139,21 @@ model Connection {
   @@index([sourceCardId])
   @@index([targetCardId])
   @@map("connections")
+}
+
+// ─── Quick Notes ─────────────────────────────────────────────────────────────
+
+model QuickNote {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  description String
+  color       String
+  pinned      Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("quick_notes")
 }

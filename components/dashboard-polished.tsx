@@ -216,23 +216,87 @@ export default function DashboardPolished() {
   const [toast, setToast] = useState("");
   const [pendingWorkspaceIds, setPendingWorkspaceIds] = useState<Set<string>>(new Set());
 
-  // Quick Notes state (session-only, not persisted)
+  // Quick Notes state (synced with database)
   const [quickNotes, setQuickNotes] = useState<QuickNote[]>([]);
+
+  useEffect(() => {
+    async function fetchNotes() {
+      try {
+        const res = await fetch("/api/quick-notes");
+        if (res.ok) {
+          const data = await res.json();
+          setQuickNotes(data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch quick notes", err);
+      }
+    }
+    fetchNotes();
+  }, []);
+
+  const handleCreateNote = async (noteInfo: Partial<QuickNote>) => {
+    try {
+      const res = await fetch("/api/quick-notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(noteInfo),
+      });
+      if (res.ok) {
+        const newNote = await res.json();
+        setQuickNotes((prev) => [newNote, ...prev]);
+        setToast("Note created");
+      } else {
+        setToast("Failed to create note");
+      }
+    } catch (err) {
+      console.error(err);
+      setToast("Error creating note");
+    }
+  };
+
+  const handleUpdateNote = async (id: string, updates: Partial<QuickNote>) => {
+    // Optimistic update
+    setQuickNotes((prev) => prev.map((n) => (n.id === id ? { ...n, ...updates } : n)));
+    try {
+      const res = await fetch(`/api/quick-notes/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) {
+        // Revert (ideal case would revert, but we'll just show an error toast)
+        setToast("Failed to sync note update");
+      } else {
+        const savedNote = await res.json();
+        setQuickNotes((prev) => prev.map((n) => (n.id === id ? savedNote : n)));
+      }
+    } catch (err) {
+      console.error(err);
+      setToast("Error updating note");
+    }
+  };
+
+  const handleDeleteNote = async (id: string) => {
+    setQuickNotes((prev) => prev.filter((n) => n.id !== id));
+    try {
+      const res = await fetch(`/api/quick-notes/${id}`, { method: "DELETE" });
+      if (!res.ok) setToast("Failed to delete note");
+    } catch (err) {
+      console.error(err);
+      setToast("Error deleting note");
+    }
+  };
 
   const pinnedNotes = useMemo(() => quickNotes.filter((n) => n.pinned), [quickNotes]);
 
   function handleAddPinnedNote() {
-    const newNote: QuickNote = {
-      id: `qn-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    handleCreateNote({
       title: "New Pinned Note",
       description: "",
       color: "#C07850",
       pinned: true,
-      createdAt: new Date().toISOString(),
-    };
-    setQuickNotes((prev) => [newNote, ...prev]);
+    });
     setView("quick-notes");
-    setToast("Pinned note created — edit it in Quick Notes");
   }
 
   // Profile modal state
@@ -1412,7 +1476,13 @@ export default function DashboardPolished() {
               </div>
 
               <div className={`view-panel ${view === "quick-notes" ? "active" : ""}`}>
-                <QuickNotesView notes={quickNotes} onNotesChange={setQuickNotes} onToast={setToast} />
+                <QuickNotesView
+                  notes={quickNotes}
+                  onCreateNote={handleCreateNote}
+                  onUpdateNote={handleUpdateNote}
+                  onDeleteNote={handleDeleteNote}
+                  onToast={setToast}
+                />
               </div>
             </div>
           </div>

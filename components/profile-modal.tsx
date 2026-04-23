@@ -3,8 +3,9 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 
 export type ProfileSettings = {
-  avatarMode: "placeholder" | "url";
+  avatarMode: "placeholder" | "url" | "initials";
   avatarUrl: string;
+  displayName?: string | null;
   email: string;
   emailVerified: boolean;
   showEmail: boolean;

@@ -14,7 +14,9 @@ export type QuickNote = {
 
 type QuickNotesViewProps = {
   notes: QuickNote[];
-  onNotesChange: (notes: QuickNote[]) => void;
+  onCreateNote: (note: Partial<QuickNote>) => void;
+  onUpdateNote: (id: string, updates: Partial<QuickNote>) => void;
+  onDeleteNote: (id: string) => void;
   onToast: (msg: string) => void;
 };
 
@@ -38,7 +40,7 @@ function truncateWords(text: string, max: number) {
   return words.slice(0, max).join(" ");
 }
 
-export default function QuickNotesView({ notes, onNotesChange, onToast }: QuickNotesViewProps) {
+export default function QuickNotesView({ notes, onCreateNote, onUpdateNote, onDeleteNote, onToast }: QuickNotesViewProps) {
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [customColors, setCustomColors] = useState<{ id: string; hex: string; label: string }[]>([]);
@@ -97,49 +99,50 @@ export default function QuickNotesView({ notes, onNotesChange, onToast }: QuickN
   const handleCreate = useCallback(() => {
     const t = formTitle.trim();
     if (!t) { onToast("Title is required"); return; }
-    const note: QuickNote = {
-      id: `qn-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    onCreateNote({
       title: truncateWords(t, 30),
       description: truncateWords(formDesc, 200),
       color: formColor,
       pinned: false,
-      createdAt: new Date().toISOString(),
-    };
-    onNotesChange([note, ...notes]);
+    });
     setCreateOpen(false);
     setFormTitle("");
     setFormDesc("");
     setFormColor(DEFAULT_COLORS[0].hex);
-    onToast("Quick note created");
-  }, [formTitle, formDesc, formColor, notes, onNotesChange, onToast]);
+    onToast("Creating note...");
+  }, [formTitle, formDesc, formColor, onCreateNote, onToast]);
 
   const handleEdit = useCallback(() => {
     if (!editId) return;
     const t = formTitle.trim();
     if (!t) { onToast("Title is required"); return; }
-    onNotesChange(notes.map((n) => n.id === editId ? { ...n, title: truncateWords(t, 30), description: truncateWords(formDesc, 200), color: formColor } : n));
+    onUpdateNote(editId, {
+      title: truncateWords(t, 30),
+      description: truncateWords(formDesc, 200),
+      color: formColor,
+    });
     setEditId(null);
     setFormTitle("");
     setFormDesc("");
-    onToast("Note updated");
-  }, [editId, formTitle, formDesc, formColor, notes, onNotesChange, onToast]);
+    onToast("Updating note...");
+  }, [editId, formTitle, formDesc, formColor, onUpdateNote, onToast]);
 
   const handleDelete = useCallback((id: string) => {
-    onNotesChange(notes.filter((n) => n.id !== id));
+    onDeleteNote(id);
     setMenuOpenId(null);
-    onToast("Note deleted");
-  }, [notes, onNotesChange, onToast]);
+    onToast("Deleting note...");
+  }, [onDeleteNote, onToast]);
 
-  const handleTogglePin = useCallback((id: string) => {
-    onNotesChange(notes.map((n) => n.id === id ? { ...n, pinned: !n.pinned } : n));
+  const handleTogglePin = useCallback((id: string, currentPin: boolean) => {
+    onUpdateNote(id, { pinned: !currentPin });
     setMenuOpenId(null);
-  }, [notes, onNotesChange]);
+  }, [onUpdateNote]);
 
   const handleChangeColor = useCallback((id: string, color: string) => {
-    onNotesChange(notes.map((n) => n.id === id ? { ...n, color } : n));
+    onUpdateNote(id, { color });
     setMenuOpenId(null);
-    onToast("Color updated");
-  }, [notes, onNotesChange, onToast]);
+    onToast("Color updating...");
+  }, [onUpdateNote, onToast]);
 
   const startEdit = useCallback((note: QuickNote) => {
     setEditId(note.id);
@@ -304,7 +307,7 @@ export default function QuickNotesView({ notes, onNotesChange, onToast }: QuickN
           <>
             <div className="qnv-menu-backdrop" onClick={closeMenu} />
             <div className="qnv-menu" style={{ top: menuPos.top, left: menuPos.left }}>
-              <button className="qnv-menu-item" onClick={() => handleTogglePin(note.id)}>{note.pinned ? "📌 Unpin" : "📌 Pin"}</button>
+              <button className="qnv-menu-item" onClick={() => handleTogglePin(note.id, note.pinned)}>{note.pinned ? "📌 Unpin" : "📌 Pin"}</button>
               <button className="qnv-menu-item" onClick={() => startEdit(note)}>✏️ Edit</button>
               <button className="qnv-menu-item danger" onClick={() => handleDelete(note.id)}>🗑️ Delete</button>
               <div className="qnv-menu-colors">
