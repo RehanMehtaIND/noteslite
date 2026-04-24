@@ -2,18 +2,20 @@
   "name": "noteslite",
   "version": "2.0.0",
   "private": true,
-  "description": "NOTESLITE migrated to Next.js + Prisma + PostgreSQL",
+  "prisma": {
+    "schema": "backend/prisma/schema.prisma"
+  },
   "scripts": {
     "dev": "next dev frontend",
     "build": "next build frontend",
-    "vercel-build": "prisma migrate deploy --schema=backend/prisma/schema.prisma && prisma generate --schema=backend/prisma/schema.prisma && next build frontend",
+    "vercel-build": "prisma migrate deploy && prisma generate && next build frontend",
     "start": "next start frontend",
     "lint": "next lint frontend",
-    "postinstall": "prisma generate --schema=backend/prisma/schema.prisma",
-    "prisma:generate": "prisma generate --schema=backend/prisma/schema.prisma",
-    "prisma:migrate": "prisma migrate dev --schema=backend/prisma/schema.prisma",
-    "prisma:migrate:deploy": "prisma migrate deploy --schema=backend/prisma/schema.prisma",
-    "prisma:studio": "prisma studio --schema=backend/prisma/schema.prisma"
+    "postinstall": "prisma generate",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:studio": "prisma studio"
   },
   "dependencies": {
     "@prisma/client": "^6.4.1",
