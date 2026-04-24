@@ -74,7 +74,8 @@ export default function BoardView({ columns, cardsData, openCardEditor, openColM
           >
             {col.cards && col.cards.map((card: string, cardIdx: number) => {
               const cardMeta = cardsData[card] || { tags: [], blocks: [] };
-              const previewBlock = cardMeta.blocks?.find((b: any) => b.t === 'p')?.v || '';
+              const firstTextBlock = cardMeta.blocks?.find((b: any) => ['p', 'h1', 'h2', 'h3'].includes(b.t) && b.v)?.v;
+              const previewBlock = cardMeta.blocks?.find((b: any) => ['p', 'h1', 'h2', 'h3', 'bullet', 'todo'].includes(b.t) && b.v)?.v || '';
               const blocksCount = cardMeta.blocks?.length || 0;
               const hasCover = cardMeta.coverA && cardMeta.coverB;
               
@@ -119,7 +120,7 @@ export default function BoardView({ columns, cardsData, openCardEditor, openColM
                     ×
                   </button>
                   <div className="noteslite-bcard-title" style={col.title === 'Done' ? { textDecoration: 'line-through', color: 'var(--text3)', paddingRight: '20px' } : { paddingRight: '20px' }}>
-                    {cardMeta.title || cardMeta.blocks?.[0]?.v || "Untitled"}
+                    {cardMeta.title || firstTextBlock || "Untitled"}
                   </div>
                   <div className="noteslite-bcard-preview">{previewBlock}</div>
                   <div className="noteslite-bcard-footer">
