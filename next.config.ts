@@ -13,7 +13,7 @@ const nextConfig: NextConfig = {
     ignoreDuringBuilds: true,
   },
   // Keep dev-server output separate so a production build cannot corrupt a live dev session.
-  distDir: isDevelopment ? "../.next-dev" : "../.next",
+  distDir: isDevelopment ? ".next-dev" : ".next",
   outputFileTracingRoot: process.cwd(),
 };
 

@@ -23,20 +23,20 @@
       }
     ],
     "paths": {
-      "@/*": [
-        "./*",
-        "../backend/*"
-      ]
+      "@/frontend/*": ["./src/frontend/*"],
+      "@/backend/*": ["./src/backend/*"],
+      "@/components/*": ["./src/frontend/components/*"],
+      "@/hooks/*": ["./src/frontend/hooks/*"],
+      "@/lib/*": ["./src/backend/lib/*"],
+      "@/*": ["./src/*"]
     }
   },
   "include": [
-    "**/*.ts",
-    "**/*.tsx",
-    "../backend/**/*.ts",
-    "../backend/**/*.tsx",
-    "../.next/types/**/*.ts",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    ".next/types/**/*.ts",
     "next-env.d.ts",
-    "../.next-dev/types/**/*.ts"
+    ".next-dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"
