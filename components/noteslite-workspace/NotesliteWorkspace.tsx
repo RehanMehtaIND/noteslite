@@ -16,7 +16,7 @@ export type ScreenMode = 'ws' | 'editor';
 export default function NotesliteWorkspace({ initialData, workspaceId }: { initialData?: any; workspaceId?: string }) {
   const [activeView, setActiveView] = useState<ViewMode>('board');
   const [activeScreen, setActiveScreen] = useState<ScreenMode>('ws');
-  
+
   const [columns, setColumns] = useState<any[]>(() => {
     if (initialData?.columns) return initialData.columns;
     return CV_SEED.filter(s => s.type === 'column').map(s => ({ ...s }));
@@ -25,10 +25,23 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
     if (initialData?.canvasItems) return initialData.canvasItems;
     return CV_SEED.map(s => ({ ...s }));
   });
-  
+
   const [cardsData, setCardsData] = useState<Record<string, any>>(() => {
     if (initialData?.cardsData) return initialData.cardsData;
     return INITIAL_CARD_DATA;
+  });
+
+  const [wsInfo, setWsInfo] = useState<{ name: string; description: string }>(() => {
+    if (initialData?.workspace) {
+      return {
+        name: initialData.workspace.name || "My Workspace",
+        description: "Personal workspace for organization and ideas"
+      };
+    }
+    return {
+      name: "Loading...",
+      description: "Please wait while we load your workspace."
+    };
   });
 
   const clientId = useMemo(() => {
@@ -49,6 +62,13 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
         const { workspace } = await res.json();
         if (cancelled || !workspace) return;
 
+        setWsInfo({
+          name: workspace.name || "Untitled Workspace",
+          description: workspace.theme?.includes("template:")
+            ? `Template based workspace — ${workspace.name}`
+            : "Personal workspace for organization and ideas"
+        });
+
         const cardsByColumn = new Map<string, any[]>();
         const newCardsData: Record<string, any> = {};
 
@@ -56,7 +76,7 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
           const colId = card.columnId || "__unassigned__";
           if (!cardsByColumn.has(colId)) cardsByColumn.set(colId, []);
           cardsByColumn.get(colId)!.push(card.id);
-          
+
           newCardsData[card.id] = {
             id: card.id,
             icon: '📄', coverA: '#7A9ABB', coverB: '#9ABACB', tags: [],
@@ -128,8 +148,8 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
   const [isColModalOpen, setIsColModalOpen] = useState(false);
-  
-  const [editorData, setEditorData] = useState<{colName: string, cardTitle: string} | null>(null);
+
+  const [editorData, setEditorData] = useState<{ colName: string, cardTitle: string } | null>(null);
 
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
@@ -178,7 +198,7 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
 
       if (!response.ok) throw new Error("Failed to create column");
       const { column } = await response.json();
-      
+
       const newCol = {
         id: column.id, type: 'column', x: 50, y: 50, w: 232, color, title: column.name, desc, cards: [], z: 99
       };
@@ -278,7 +298,7 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
   const handleDeleteColumn = (colId: string) => {
     const col = columns.find(c => c.id === colId);
     if (!col) return;
-    
+
     setColumns(prev => prev.filter(c => c.id !== colId));
     setCanvasItems(prev => prev.filter(i => i.id !== colId));
     triggerToast(`Column "${col.title}" deleted`);
@@ -298,18 +318,18 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
         const cards = [...sourceCol.cards];
         const oldIndex = cards.indexOf(cardTitle);
         if (oldIndex === -1) return prev;
-        
+
         cards.splice(oldIndex, 1);
         const insertIndex = targetIndex !== undefined ? targetIndex : cards.length;
         cards.splice(insertIndex, 0, cardTitle);
-        
+
         sourceCol.cards = cards;
         newColumns[sourceColIndex] = sourceCol;
         return newColumns;
       }
 
       sourceCol.cards = sourceCol.cards.filter((c: string) => c !== cardTitle);
-      
+
       const newTargetCards = [...(targetCol.cards || [])];
       if (targetIndex !== undefined) {
         newTargetCards.splice(targetIndex, 0, cardTitle);
@@ -329,19 +349,21 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
     <div className="noteslite-workspace-container">
       {/* SCREEN 1 — WORKSPACE */}
       <div className={`noteslite-screen ${activeScreen === 'ws' ? 'active' : ''}`} id="noteslite-screen-ws">
-        <TopBar 
-          activeView={activeView} 
-          switchView={switchView} 
-          triggerToast={triggerToast} 
+        <TopBar
+          activeView={activeView}
+          switchView={switchView}
+          triggerToast={triggerToast}
           openColModal={() => setIsColModalOpen(true)}
           openCardEditor={() => handleAddCard()}
+          workspaceName={wsInfo.name}
+          workspaceDesc={wsInfo.description}
         />
 
         <div style={{ flex: 1, display: activeView === 'board' ? 'flex' : 'none', flexDirection: 'column', overflow: 'hidden' }}>
-          <BoardView 
-            columns={columns} 
+          <BoardView
+            columns={columns}
             cardsData={cardsData}
-            openCardEditor={openCardEditor} 
+            openCardEditor={openCardEditor}
             openColModal={() => setIsColModalOpen(true)}
             triggerToast={triggerToast}
             handleMoveCard={handleMoveCard}
@@ -353,8 +375,8 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
 
         <div style={{ flex: 1, display: activeView === 'canvas' ? 'flex' : 'none', flexDirection: 'column', overflow: 'hidden' }}>
           {activeView === 'canvas' && (
-            <CanvasView 
-              items={canvasItems} 
+            <CanvasView
+              items={canvasItems}
               setItems={setCanvasItems}
               connections={CV_CONNECTIONS}
               triggerToast={triggerToast}
@@ -377,13 +399,13 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
       {/* SCREEN 2 — CARD DEEP EDITOR */}
       <div className={`noteslite-screen ${activeScreen === 'editor' ? 'active' : ''}`} id="noteslite-screen-editor">
         {activeScreen === 'editor' && editorData && (
-          <CardEditor 
-            colName={editorData.colName} 
-            cardTitle={editorData.cardTitle} 
+          <CardEditor
+            colName={editorData.colName}
+            cardTitle={editorData.cardTitle}
             cardData={cardsData[editorData.cardTitle]}
             setCardData={(data) => {
               setCardsData(prev => ({ ...prev, [editorData.cardTitle]: data }));
-              
+
               if (workspaceId) {
                 // Debounce patching
                 if ((window as any)._saveTimeout) clearTimeout((window as any)._saveTimeout);
@@ -396,7 +418,7 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
                 }, 500);
               }
             }}
-            closeEditor={closeEditor} 
+            closeEditor={closeEditor}
             triggerToast={triggerToast}
             handleDeleteCard={handleDeleteCard}
           />
@@ -405,9 +427,9 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
 
       {/* Column Modal */}
       {isColModalOpen && (
-        <ColumnModal 
-          onClose={() => setIsColModalOpen(false)} 
-          onCreate={handleAddColumn} 
+        <ColumnModal
+          onClose={() => setIsColModalOpen(false)}
+          onCreate={handleAddColumn}
         />
       )}
 
@@ -416,5 +438,7 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
         {toastMessage}
       </div>
     </div>
+  );
+}
   );
 }
