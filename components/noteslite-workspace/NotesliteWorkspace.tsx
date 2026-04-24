@@ -440,5 +440,4 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
     </div>
   );
 }
-  );
-}
+
