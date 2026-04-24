@@ -13,6 +13,8 @@ export type ProfileSettings = {
   emailNotifications: boolean;
   twoFactorEnabled: boolean;
   twoFactorMethod: "authenticator" | "sms" | "email";
+  theme: "standard" | "dark" | "space";
+  dashboardBackground?: string | null;
 };
 
 export type PasswordForm = {
@@ -46,6 +48,7 @@ type ProfileModalProps = {
   onConfirmEmailOtp?: () => void;
   
   isUpdating2FA?: boolean;
+  onOpenPreferences?: () => void;
 };
 
 const TIMEZONE_OPTIONS = [
@@ -60,9 +63,10 @@ const TIMEZONE_OPTIONS = [
 
 function isValidImageUrl(value: string) {
   if (!value.trim()) return false;
+  if (value.startsWith("data:image/")) return true;
   try {
     const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:";
+    return url.protocol === "http:" || url.protocol === "https:" || url.protocol === "data:";
   } catch {
     return false;
   }
@@ -106,6 +110,7 @@ export default function ProfileModal({
   onSendEmailOtp,
   onConfirmEmailOtp,
   isUpdating2FA = false,
+  onOpenPreferences,
 }: ProfileModalProps) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -392,6 +397,44 @@ export default function ProfileModal({
         }
         .pm-btn-logout:hover, .pm-btn-logout:focus-visible { background: #f7c1c1; border-color: rgba(163,45,45,0.5); }
         .pm-btn-logout:active { transform: scale(0.98); }
+        .pm-theme-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .pm-theme-option {
+          cursor: pointer; border-radius: var(--pm-radius-md); border: 2px solid transparent;
+          padding: 8px; transition: all 0.2s; background: var(--pm-cream-card);
+          display: flex; flex-direction: column; gap: 8px; align-items: center;
+          box-shadow: var(--pm-shadow-card);
+        }
+        .pm-theme-option:hover { border-color: var(--pm-border-strong); }
+        .pm-theme-option.pm-active { border-color: var(--pm-purple); background: var(--pm-purple-bg); }
+        .pm-theme-preview {
+          width: 100%; height: 40px; border-radius: 6px; border: 0.5px solid var(--pm-border);
+          position: relative; overflow: hidden;
+        }
+        .pm-theme-preview.standard { background: #F2EFE9; }
+        .pm-theme-preview.dark { background: #1A1A1A; }
+        .pm-theme-preview.space { 
+          background: linear-gradient(135deg, #0F0C29 0%, #302B63 50%, #24243E 100%);
+          overflow: hidden;
+        }
+        .pm-theme-preview.space::after {
+          content: ''; position: absolute; inset: 0;
+          background-image: radial-gradient(white 1px, transparent 0);
+          background-size: 10px 10px; opacity: 0.2;
+        }
+        .pm-theme-name { font-size: 11px; font-weight: 500; color: var(--pm-ink); }
+        .pm-theme-option.pm-active .pm-theme-name { color: var(--pm-purple); }
+
+        .pm-bg-preview-container {
+          width: 100%; height: 120px; border-radius: var(--pm-radius-md);
+          border: 1px dashed var(--pm-border-strong); background: var(--pm-cream);
+          display: flex; align-items: center; justify-content: center;
+          overflow: hidden; position: relative; cursor: pointer; transition: all 0.2s;
+        }
+        .pm-bg-preview-container:hover { border-color: var(--pm-purple); background: var(--pm-cream-deep); }
+        .pm-bg-preview-img { width: 100%; height: 100%; object-fit: cover; }
+        .pm-bg-empty-msg { font-size: 12px; color: var(--pm-ink-faint); display: flex; flex-direction: column; align-items: center; gap: 8px; }
+        .pm-bg-empty-icon { font-size: 24px; }
+        .pm-bg-actions { display: flex; gap: 8px; margin-top: 10px; }
       `}</style>
       
       <div className={`pm-root pm-backdrop ${isVisible ? 'pm-show' : ''}`} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -445,15 +488,25 @@ export default function ProfileModal({
                     </span>
                   </div>
                   <div>
-                    <div className="pm-field-label">Image URL</div>
+                    <div className="pm-field-label">Upload Image</div>
                     <div className="pm-url-row">
                       <input 
-                        type="url" 
+                        type="file" 
+                        accept=".png, .jpg, .jpeg"
                         className="pm-input" 
-                        placeholder="https://example.com/photo.jpg" 
-                        value={imgUrlInput}
-                        onChange={(e) => setImgUrlInput(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && applyImage()}
+                        style={{ padding: '6px 12px' }}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                              if (event.target?.result) {
+                                setImgUrlInput(event.target.result as string);
+                              }
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
                       />
                       <button className="pm-btn pm-btn-primary" onClick={applyImage}>Apply</button>
                     </div>
@@ -524,50 +577,21 @@ export default function ProfileModal({
                   <span className="pm-section-label">Preferences</span>
                   <h2 className="pm-section-title">Personal settings</h2>
                 </div>
-                <span className="pm-section-count">2 options</span>
               </div>
-              <div className="pm-cards-grid">
-                
-                <div className="pm-card">
-                  <div className="pm-card-head">
-                    <span className="pm-card-badge">Timezone</span>
-                    <h3 className="pm-card-title">Local time context</h3>
-                    <p className="pm-card-desc">Choose the timezone for dashboard timestamps and reminders.</p>
-                  </div>
-                  <div>
-                    <div className="pm-field-label">Selected timezone</div>
-                    <select 
-                      className="pm-select"
-                      value={profile.timezone}
-                      onChange={(e) => onUpdateProfile({ timezone: e.target.value })}
-                    >
-                      {TIMEZONE_OPTIONS.map((tz) => (
-                        <option key={tz.value} value={tz.value}>{tz.label}</option>
-                      ))}
-                    </select>
-                  </div>
+              <div className="pm-card" style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div className="pm-card-head">
+                  <h3 className="pm-card-title">Dashboard Preferences</h3>
+                  <p className="pm-card-desc">Customize your theme, background, timezone, and notifications.</p>
                 </div>
-
-                <div className="pm-card">
-                  <div className="pm-card-head">
-                    <span className="pm-card-badge">Notifications</span>
-                    <h3 className="pm-card-title">Email notifications</h3>
-                    <p className="pm-card-desc">Decide whether updates and reminders arrive in your inbox.</p>
-                  </div>
-                  <div className="pm-toggle-row" style={{ marginTop: 'auto' }}>
-                    <div className="pm-toggle-info">
-                      <div className="pm-toggle-title">Notification status</div>
-                      <div className="pm-toggle-sub">{profile.emailNotifications ? "Inbox updates are enabled" : "Notifications are paused"}</div>
-                    </div>
-                    <button 
-                      className={`pm-toggle ${profile.emailNotifications ? 'pm-on' : ''}`} 
-                      onClick={() => onUpdateProfile({ emailNotifications: !profile.emailNotifications })}
-                      aria-label="Toggle notifications"
-                    ></button>
-                    <span className="pm-toggle-status">{profile.emailNotifications ? 'ON' : 'OFF'}</span>
-                  </div>
-                </div>
-
+                <button 
+                  className="pm-btn pm-btn-primary"
+                  onClick={() => {
+                    onClose();
+                    onOpenPreferences?.();
+                  }}
+                >
+                  Open Preferences
+                </button>
               </div>
             </div>
 

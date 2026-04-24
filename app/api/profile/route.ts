@@ -1,3 +1,4 @@
+
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -17,6 +18,8 @@ export async function GET() {
         avatarUrl: true,
         displayName: true,
         showEmail: true,
+        theme: true,
+        dashboardBackground: true,
       },
     });
 
@@ -36,6 +39,8 @@ const updateProfileSchema = z.object({
   avatarUrl: z.string().nullable().optional(),
   displayName: z.string().nullable().optional(),
   showEmail: z.boolean().optional(),
+  theme: z.string().optional(),
+  dashboardBackground: z.string().nullable().optional(),
 });
 
 export async function PATCH(req: Request) {
@@ -55,12 +60,16 @@ export async function PATCH(req: Request) {
         ...(body.avatarUrl !== undefined && { avatarUrl: body.avatarUrl }),
         ...(body.displayName !== undefined && { displayName: body.displayName }),
         ...(body.showEmail !== undefined && { showEmail: body.showEmail }),
+        ...(body.theme !== undefined && { theme: body.theme }),
+        ...(body.dashboardBackground !== undefined && { dashboardBackground: body.dashboardBackground }),
       },
       select: {
         avatarMode: true,
         avatarUrl: true,
         displayName: true,
         showEmail: true,
+        theme: true,
+        dashboardBackground: true,
       },
     });
 

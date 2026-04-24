@@ -312,7 +312,7 @@ export default function CanvasView({ items, setItems, connections, triggerToast,
             <svg className="noteslite-cv-svg">
               <defs>
                 <marker id="noteslite-cvarr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-                  <path d="M0,0 L0,6 L8,3 z" fill="rgba(44,38,28,0.22)" />
+                  <path d="M0,0 L0,6 L8,3 z" fill="var(--border2, rgba(44,38,28,0.22))" />
                 </marker>
               </defs>
               {connections.map(([fromId, toId], idx) => {
@@ -330,7 +330,7 @@ export default function CanvasView({ items, setItems, connections, triggerToast,
                   <path 
                     key={idx} 
                     d={`M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`}
-                    fill="none" stroke="rgba(44,38,28,0.15)" strokeWidth="1.5" strokeDasharray="5 3" markerEnd="url(#noteslite-cvarr)"
+                    fill="none" stroke="var(--border2, rgba(44,38,28,0.15))" strokeWidth="1.5" strokeDasharray="5 3" markerEnd="url(#noteslite-cvarr)"
                   />
                 );
               })}

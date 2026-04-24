@@ -23,8 +23,8 @@ export async function GET() {
 }
 
 const createNoteSchema = z.object({
-  title: z.string().min(1, "Title is required"),
-  description: z.string().optional().default(""),
+  title: z.string().min(1, "Title is required").max(50, "Title must be 50 characters or less"),
+  description: z.string().max(500, "Description must be 500 characters or less").optional().default(""),
   color: z.string().optional().default("#5A7A9A"),
   pinned: z.boolean().optional().default(false),
 });

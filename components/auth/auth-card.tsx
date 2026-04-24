@@ -48,7 +48,7 @@ export function AuthCard({ children }: { children: ReactNode }) {
 
 export function CardHeader({ label }: CardHeaderProps) {
   return (
-    <header className="border-b border-[#ddd6d0] bg-[var(--auth-card)] px-9 pb-8 pt-9 text-center">
+    <header className="bg-[var(--auth-card)] px-9 pb-8 pt-9 text-center">
       <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#8a827d]">{label}</p>
       <h1 className="mt-4 [font-family:'Playfair_Display','Times_New_Roman',serif] text-[30px] font-bold uppercase leading-none tracking-[0.08em] text-[var(--auth-title)]">
         NOTESLITE
@@ -114,9 +114,8 @@ export function PasswordStrengthBar({ level }: { level: number }) {
         {[0, 1, 2, 3].map((segment) => (
           <span
             key={segment}
-            className={`h-1.5 rounded-full ${
-              segment < level ? "bg-[var(--auth-title)]" : "bg-[#d9cfd0]"
-            }`}
+            className={`h-1.5 rounded-full ${segment < level ? "bg-[var(--auth-title)]" : "bg-[#d9cfd0]"
+              }`}
           />
         ))}
       </div>

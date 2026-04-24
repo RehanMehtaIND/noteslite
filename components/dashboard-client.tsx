@@ -10,10 +10,15 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
+import LoadingScreen from "@/components/loading-screen";
 import ProfileModal, {
   type PasswordForm,
   type ProfileSettings,
 } from "@/components/profile-modal";
+import PreferencesModal from "@/components/preferences-modal";
+import { useLoadingScreen } from "@/hooks/use-loading-screen";
+import { startTeleportLoading } from "@/lib/loading-screen";
+import { setTheme, type Theme } from "@/lib/theme";
 
 type WorkspaceItem = {
   id: string;
@@ -115,9 +120,10 @@ function parseTheme(theme: string): { mode: ThemeEditorMode; value: string } {
 }
 
 function isValidImageUrl(value: string) {
+  if (value.startsWith("data:image/")) return true;
   try {
     const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:";
+    return url.protocol === "http:" || url.protocol === "https:" || url.protocol === "data:";
   } catch {
     return false;
   }
@@ -164,6 +170,8 @@ function createDefaultProfileSettings({
     emailNotifications: true,
     twoFactorEnabled: false,
     twoFactorMethod: "authenticator",
+    theme: "standard",
+    dashboardBackground: null,
   };
 }
 
@@ -206,6 +214,14 @@ function mergeStoredProfileSettings(
       candidate.twoFactorMethod === "sms" || candidate.twoFactorMethod === "authenticator"
         ? candidate.twoFactorMethod
         : defaults.twoFactorMethod,
+    theme: 
+      candidate.theme === "standard" || candidate.theme === "dark" || candidate.theme === "space"
+        ? candidate.theme
+        : defaults.theme,
+    dashboardBackground:
+      typeof candidate.dashboardBackground === "string" || candidate.dashboardBackground === null
+        ? candidate.dashboardBackground
+        : defaults.dashboardBackground,
   };
 }
 
@@ -253,6 +269,12 @@ export default function DashboardClient({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const {
+    isVisible: isLoaderVisible,
+    isExiting: isLoaderExiting,
+    workspaceName: loaderWorkspaceName,
+    variant: loaderVariant,
+  } = useLoadingScreen(isLoading);
   const [isSaving, setIsSaving] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [themeEditorMode, setThemeEditorMode] = useState<ThemeEditorMode>("preset");
@@ -272,6 +294,9 @@ export default function DashboardClient({
   const profileTriggerRef = useRef<HTMLButtonElement | null>(null);
   const profileCloseTimerRef = useRef<number | null>(null);
   const hasHydratedProfileRef = useRef(false);
+  
+  const [isPreferencesMounted, setIsPreferencesMounted] = useState(false);
+  const [isPreferencesVisible, setIsPreferencesVisible] = useState(false);
   const profileInitials = useMemo(() => getProfileInitials(userName), [userName]);
   const user = session?.user;
   const userEmail = user?.email ?? "";
@@ -328,6 +353,16 @@ export default function DashboardClient({
       profileTriggerRef.current?.focus();
       profileCloseTimerRef.current = null;
     }, PROFILE_MODAL_DURATION);
+  }, []);
+
+  const openPreferencesModal = useCallback(() => {
+    setIsPreferencesMounted(true);
+    window.requestAnimationFrame(() => setIsPreferencesVisible(true));
+  }, []);
+
+  const closePreferencesModal = useCallback(() => {
+    setIsPreferencesVisible(false);
+    setTimeout(() => setIsPreferencesMounted(false), PROFILE_MODAL_DURATION);
   }, []);
 
   const updateProfile = useCallback((updates: Partial<ProfileSettings>) => {
@@ -507,9 +542,21 @@ export default function DashboardClient({
         avatarUrl: profile.avatarUrl,
         displayName: profile.displayName,
         showEmail: profile.showEmail,
+        theme: profile.theme,
+        dashboardBackground: profile.dashboardBackground,
       }),
     }).catch(console.error);
   }, [profile]);
+
+  useEffect(() => {
+    // Sync the local profile theme to the document body to globally update UI immediately
+    if (typeof document !== "undefined") {
+      document.body.classList.remove("theme-standard", "theme-dark", "theme-space");
+      if (profile.theme) {
+        setTheme(profile.theme as Theme);
+      }
+    }
+  }, [profile.theme]);
 
   useEffect(() => {
     if (!editingWorkspace) {
@@ -602,8 +649,9 @@ export default function DashboardClient({
   };
 
   const openWorkspace = useCallback(
-    (workspaceId: string) => {
-      router.push(`/dashboard/${workspaceId}`);
+    (workspace: WorkspaceItem) => {
+      startTeleportLoading({ workspaceName: workspace.name });
+      router.push(`/dashboard/${workspace.id}`);
     },
     [router],
   );
@@ -640,18 +688,37 @@ export default function DashboardClient({
     await persistWorkspace(editingWorkspace.id, { theme: nextTheme });
   };
 
-  if (isLoading) {
+  if (isLoaderVisible) {
     return (
-      <div className="min-h-screen grid place-items-center bg-[linear-gradient(180deg,#ebe6de_0%,#e3cdc0_100%)] text-[#666a72]">
-        <p className="text-xl tracking-[0.14em] uppercase [font-family:'Cinzel','Times_New_Roman',serif]">
-          Loading Noteslite
-        </p>
-      </div>
+      <LoadingScreen
+        exiting={isLoaderExiting}
+        workspaceName={loaderWorkspaceName}
+        variant={loaderVariant}
+      />
     );
   }
 
   return (
-    <div className="fixed inset-0 overflow-hidden bg-[linear-gradient(180deg,#ebe6de_0%,#e3cdc0_100%)] text-[#64666b]">
+    <div className="fixed inset-0 overflow-hidden transition-colors duration-500">
+      {profile.dashboardBackground && (
+        <div 
+          className="absolute inset-0 z-0 opacity-40 transition-opacity duration-700"
+          style={{ 
+            backgroundImage: `url(${profile.dashboardBackground})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            filter: profile.theme === 'dark' ? 'brightness(0.6) contrast(1.2)' : 'none'
+          }}
+        />
+      )}
+      {profile.theme === 'space' && !profile.dashboardBackground && (
+        <div className="absolute inset-0 z-0 opacity-30">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom,_#1B2735_0%,_#090A0F_100%)]" />
+          <div className="stars-container" style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+            {/* Simple CSS stars could go here */}
+          </div>
+        </div>
+      )}
       <style>{`
         @keyframes pageFadeIn {
           0% { opacity: 0; transform: translate(-50%, -50%) scale(var(--scale)) translateY(10px); }
@@ -728,10 +795,10 @@ export default function DashboardClient({
           <div className="flex h-full flex-col pb-[34px] pl-6 pr-[36px] pt-[30px]">
             <header className="flex h-[112px] items-center justify-end gap-7 [animation:fadeUp_720ms_ease-out_130ms_both] motion-reduce:animate-none">
               <div className="flex flex-col items-end gap-2">
-                <h1 className="m-0 text-[84px] leading-none font-medium tracking-[2px] text-[#63666d] transition-[transform,letter-spacing] duration-500 hover:-translate-y-0.5 hover:tracking-[3px] [font-family:'Cinzel','Times_New_Roman',serif]">
+                <h1 className="m-0 text-[84px] leading-none font-medium tracking-[2px] text-[color:var(--dashboard-title)] transition-[transform,letter-spacing] duration-500 hover:-translate-y-0.5 hover:tracking-[3px] [font-family:'Cinzel','Times_New_Roman',serif]">
                   NOTESLITE
                 </h1>
-                <div className="flex items-center gap-3 text-[13px] uppercase tracking-[0.16em] text-[#696d75]">
+                <div className="flex items-center gap-3 text-[13px] uppercase tracking-[0.16em] text-[color:var(--dashboard-text)]">
                   <span>{userName}</span>
                 </div>
               </div>
@@ -743,10 +810,10 @@ export default function DashboardClient({
                 aria-haspopup="dialog"
                 aria-expanded={isProfileMounted && isProfileVisible}
                 aria-controls="dashboard-profile-dialog"
-                className="group flex flex-col items-center gap-2 rounded-[28px] px-2 py-2 text-[11px] uppercase tracking-[0.18em] text-[#696d75] transition-colors duration-300 hover:text-[#565a62] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dashboard-modal-ring)] focus-visible:ring-offset-4 focus-visible:ring-offset-[rgba(235,230,222,0.96)]"
+                className="group flex flex-col items-center gap-2 rounded-[28px] px-2 py-2 text-[11px] uppercase tracking-[0.18em] text-[color:var(--dashboard-text)] transition-colors duration-300 hover:text-[color:var(--dashboard-title)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dashboard-modal-ring)] focus-visible:ring-offset-4 focus-visible:ring-offset-[rgba(235,230,222,0.96)]"
               >
                 <span
-                  className={`grid h-[78px] w-[78px] place-items-center rounded-full border border-[rgba(255,255,255,0.78)] bg-[radial-gradient(circle_at_30%_25%,#f2f2f2_0%,#dbdbdb_76%)] text-[22px] font-semibold tracking-[0.08em] text-[#7b7f87] [box-shadow:0_12px_24px_rgba(87,78,69,0.24)] [animation:avatarDrift_4.6s_ease-in-out_infinite] transition-[transform,box-shadow] duration-300 group-hover:-translate-y-0.5 group-hover:[box-shadow:0_16px_30px_rgba(87,78,69,0.28)] motion-reduce:animate-none ${
+                  className={`grid h-[78px] w-[78px] place-items-center rounded-full border border-[rgba(255,255,255,0.78)] bg-[radial-gradient(circle_at_30%_25%,#f2f2f2_0%,#dbdbdb_76%)] text-[22px] font-semibold tracking-[0.08em] text-[color:var(--dashboard-icon)] [box-shadow:0_12px_24px_rgba(87,78,69,0.24)] [animation:avatarDrift_4.6s_ease-in-out_infinite] transition-[transform,box-shadow] duration-300 group-hover:-translate-y-0.5 group-hover:[box-shadow:0_16px_30px_rgba(87,78,69,0.28)] motion-reduce:animate-none ${
                     profileAvatarStyle ? "bg-cover bg-center text-transparent" : ""
                   }`}
                   style={profileAvatarStyle}
@@ -755,6 +822,21 @@ export default function DashboardClient({
                   {profileAvatarStyle ? "." : profileInitials}
                 </span>
                 <span>Profile</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={openPreferencesModal}
+                aria-label="Open dashboard preferences"
+                className="group flex flex-col items-center gap-2 rounded-[28px] px-2 py-2 text-[11px] uppercase tracking-[0.18em] text-[#696d75] transition-colors duration-300 hover:text-[#565a62] focus-visible:outline-none"
+              >
+                <span
+                  className="grid h-[78px] w-[78px] place-items-center rounded-full border border-[rgba(255,255,255,0.78)] bg-[radial-gradient(circle_at_30%_25%,#f2f2f2_0%,#dbdbdb_76%)] text-[26px] [box-shadow:0_12px_24px_rgba(87,78,69,0.24)] transition-[transform,box-shadow] duration-300 group-hover:-translate-y-0.5 group-hover:[box-shadow:0_16px_30px_rgba(87,78,69,0.28)]"
+                  aria-hidden="true"
+                >
+                  ⚙️
+                </span>
+                <span>Preferences</span>
               </button>
             </header>
 
@@ -775,11 +857,11 @@ export default function DashboardClient({
                 {workspaces.map((ws, index) => (
                   <article
                     key={ws.id}
-                    onClick={() => openWorkspace(ws.id)}
+                    onClick={() => openWorkspace(ws)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
-                        openWorkspace(ws.id);
+                        openWorkspace(ws);
                       }
                     }}
                     tabIndex={0}
@@ -1081,6 +1163,17 @@ export default function DashboardClient({
           onUpdateProfile={updateProfile}
           onUpdatePassword={updatePasswordField}
           onSavePassword={savePasswordChange}
+          isPasswordLoading={isPasswordLoading}
+          onOpenPreferences={openPreferencesModal}
+        />
+      ) : null}
+
+      {isPreferencesMounted ? (
+        <PreferencesModal
+          isVisible={isPreferencesVisible}
+          profile={profile}
+          onClose={closePreferencesModal}
+          onUpdateProfile={updateProfile}
         />
       ) : null}
     </div>

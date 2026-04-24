@@ -165,16 +165,16 @@ export default function QuickNotesView({ notes, onCreateNote, onUpdateNote, onDe
       <style>{`
         .qnv-header { display:flex; align-items:center; gap:12px; margin-bottom:18px; flex-wrap:wrap; }
         .qnv-title { font-family:"Syne",sans-serif; font-weight:700; font-size:13px; color:var(--text,#2c2018); letter-spacing:.08em; text-transform:uppercase; flex-shrink:0; }
-        .qnv-search { flex:1; min-width:160px; max-width:320px; height:34px; border-radius:20px; background:var(--bg2,#e3ddd4); border:1px solid var(--border2,rgba(44,38,28,.12)); padding:0 14px; font-family:"DM Sans",sans-serif; font-size:12px; color:var(--text,#2c2018); outline:none; }
+        .qnv-search { flex:1; min-width:160px; max-width:320px; height:34px; border-radius:20px; background:var(--bg2); border:1px solid var(--border2); padding:0 14px; font-family:"DM Sans",sans-serif; font-size:12px; color:var(--text); outline:none; }
         .qnv-search::placeholder { color:var(--text3,#a09080); }
-        .qnv-search:focus { border-color:var(--frame,#6ba3be); box-shadow:0 0 0 2px rgba(107,163,190,.15); }
+        .qnv-search:focus { border-color:var(--frame); box-shadow:0 0 0 2px var(--shadow); }
         .qnv-add-btn { width:34px; height:34px; border-radius:10px; border:none; background:var(--text,#2c2018); color:var(--surface2,#fdfaf5); font-size:20px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all .15s; flex-shrink:0; }
         .qnv-add-btn:hover { background:#3d3025; transform:translateY(-1px); }
         .qnv-filters { display:flex; gap:6px; margin-bottom:16px; flex-wrap:wrap; align-items:center; }
         .qnv-fbtn { width:22px; height:22px; border-radius:50%; border:2.5px solid transparent; cursor:pointer; transition:all .15s; flex-shrink:0; }
         .qnv-fbtn.active { border-color:var(--text,#2c2018); transform:scale(1.18); box-shadow:0 0 0 2px rgba(44,38,28,.12); }
         .qnv-fbtn:hover { transform:scale(1.12); }
-        .qnv-fall { padding:4px 12px; border-radius:14px; border:1px solid var(--border2,rgba(44,38,28,.12)); background:var(--surface,#f5f0e8); font-family:"Syne",sans-serif; font-size:10px; font-weight:700; letter-spacing:.06em; color:var(--text3,#a09080); cursor:pointer; text-transform:uppercase; transition:all .15s; }
+        .qnv-fall { padding:4px 12px; border-radius:14px; border:1px solid var(--border2); background:var(--surface); font-family:"Syne",sans-serif; font-size:10px; font-weight:700; letter-spacing:.06em; color:var(--text3); cursor:pointer; text-transform:uppercase; transition:all .15s; }
         .qnv-fall.active { background:var(--text,#2c2018); color:var(--surface2,#fdfaf5); border-color:var(--text,#2c2018); }
         .qnv-add-color-btn { width:22px; height:22px; border-radius:50%; border:2px dashed var(--border2,rgba(44,38,28,.12)); background:none; cursor:pointer; font-size:14px; color:var(--text3,#a09080); display:flex; align-items:center; justify-content:center; transition:all .15s; }
         .qnv-add-color-btn:hover { border-color:var(--frame,#6ba3be); color:var(--frame,#6ba3be); }
@@ -182,7 +182,7 @@ export default function QuickNotesView({ notes, onCreateNote, onUpdateNote, onDe
         .qnv-custom-input { width:80px; height:28px; border-radius:8px; border:1px solid var(--border2); padding:0 8px; font-size:11px; font-family:"DM Sans",sans-serif; }
         .qnv-custom-ok { height:28px; padding:0 10px; border-radius:8px; border:none; background:var(--text); color:var(--surface2); font-size:10px; font-weight:700; cursor:pointer; font-family:"Syne",sans-serif; }
         .qnv-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:16px; }
-        .qnv-card { background:var(--surface2,#fdfaf5); border:1px solid var(--border2,rgba(44,38,28,.10)); border-radius:14px; padding:0; position:relative; cursor:pointer; transition:all .25s cubic-bezier(.4,0,.2,1); display:flex; flex-direction:row; overflow:hidden; min-height:110px; }
+        .qnv-card { background:var(--surface2); border:1px solid var(--border2); border-radius:14px; padding:0; position:relative; cursor:pointer; transition:all .25s cubic-bezier(.4,0,.2,1); display:flex; flex-direction:row; overflow:hidden; min-height:110px; }
         .qnv-card:hover { transform:translateY(-2px); box-shadow:0 12px 36px rgba(44,38,28,.10); border-color:rgba(44,38,28,.16); }
         .qnv-card-accent { width:4px; flex-shrink:0; border-radius:14px 0 0 14px; }
         .qnv-card-body { flex:1; padding:14px 16px; display:flex; flex-direction:column; gap:4px; min-width:0; }
@@ -197,23 +197,23 @@ export default function QuickNotesView({ notes, onCreateNote, onUpdateNote, onDe
         .qnv-card-footer { display:flex; align-items:center; gap:8px; margin-top:auto; padding-top:8px; }
         .qnv-card-pin-badge { display:inline-flex; align-items:center; gap:3px; padding:2px 7px; border-radius:6px; font-size:9px; font-weight:600; letter-spacing:.04em; font-family:"Syne",sans-serif; text-transform:uppercase; }
         .qnv-card-time { font-size:10px; color:var(--text3,#a09080); margin-left:auto; font-variant-numeric:tabular-nums; }
-        .qnv-menu { position:fixed; width:170px; background:var(--surface2,#fdfaf5); border:1px solid var(--border2); border-radius:12px; box-shadow:0 8px 32px rgba(44,38,28,.16); z-index:10001; overflow:hidden; animation:qnvFade .15s; }
+        .qnv-menu { position:fixed; width:170px; background:var(--surface2,#fdfaf5); border:1px solid var(--border2); border-radius:12px; box-shadow:var(--shadow-lg); z-index:10001; overflow:hidden; animation:qnvFade .15s; }
         .qnv-menu-backdrop { position:fixed; inset:0; z-index:10000; }
         .qnv-menu-item { width:100%; border:none; background:none; padding:9px 14px; font-size:12px; font-weight:500; color:var(--text2); cursor:pointer; text-align:left; display:flex; align-items:center; gap:8px; transition:background .12s; }
         .qnv-menu-item:hover { background:var(--bg2,#e3ddd4); }
         .qnv-menu-item.danger { color:#c0392b; }
-        .qnv-menu-colors { display:flex; gap:4px; padding:8px 14px; flex-wrap:wrap; border-top:1px solid var(--border,rgba(44,38,28,.07)); }
+        .qnv-menu-colors { display:flex; gap:4px; padding:8px 14px; flex-wrap:wrap; border-top:1px solid var(--border); }
         .qnv-menu-cdot { width:18px; height:18px; border-radius:50%; cursor:pointer; border:2px solid transparent; transition:all .12s; }
         .qnv-menu-cdot:hover { transform:scale(1.15); }
         .qnv-menu-cdot.sel { border-color:var(--text); }
-        .qnv-overlay { position:fixed; inset:0; background:rgba(44,38,28,.4); backdrop-filter:blur(6px); z-index:10000; display:flex; align-items:center; justify-content:center; animation:qnvFade .2s; padding:20px; }
-        .qnv-popup { background:var(--surface2,#fdfaf5); border:1px solid var(--border2); border-radius:24px; padding:28px 30px; width:min(520px,100%); max-height:80vh; overflow-y:auto; box-shadow:0 16px 60px rgba(44,38,28,.18); position:relative; overflow:hidden; }
+        .qnv-overlay { position:fixed; inset:0; background:rgba(0,0,0,.4); backdrop-filter:blur(6px); z-index:10000; display:flex; align-items:center; justify-content:center; animation:qnvFade .2s; padding:20px; }
+        .qnv-popup { background:var(--surface2,#fdfaf5); border:1px solid var(--border2); border-radius:24px; padding:28px 30px; width:min(520px,100%); max-height:80vh; overflow-y:auto; box-shadow:var(--shadow-lg); position:relative; overflow:hidden; }
         .qnv-popup-accent { position:absolute; top:0; left:0; right:0; height:4px; }
         .qnv-popup-close { position:absolute; top:14px; right:14px; width:30px; height:30px; border-radius:8px; border:1px solid var(--border2); background:var(--surface); cursor:pointer; font-size:16px; color:var(--text2); display:flex; align-items:center; justify-content:center; }
         .qnv-popup-title { font-family:"Playfair Display",serif; font-size:22px; font-weight:700; color:var(--text); margin-bottom:6px; margin-top:8px; }
         .qnv-popup-desc { font-size:14px; color:var(--text2); line-height:1.7; white-space:pre-wrap; margin-top:12px; }
         .qnv-popup-meta { font-size:11px; color:var(--text3); margin-top:16px; display:flex; gap:12px; align-items:center; }
-        .qnv-form { background:var(--surface2,#fdfaf5); border:1px solid var(--border2); border-radius:24px; padding:28px 30px; width:min(480px,100%); box-shadow:0 16px 60px rgba(44,38,28,.18); }
+        .qnv-form { background:var(--surface2,#fdfaf5); border:1px solid var(--border2); border-radius:24px; padding:28px 30px; width:min(480px,100%); box-shadow:var(--shadow-lg); }
         .qnv-form-title { font-family:"Playfair Display",serif; font-size:20px; font-weight:700; color:var(--text); margin-bottom:4px; }
         .qnv-form-sub { font-size:12px; color:var(--text3); margin-bottom:18px; }
         .qnv-form-label { font-size:9.5px; font-weight:700; letter-spacing:.14em; color:var(--text2); margin-bottom:5px; font-family:"Syne",sans-serif; text-transform:uppercase; }

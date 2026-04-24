@@ -4,7 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import ProfileModal, { type ProfileSettings, type PasswordForm } from "./profile-modal";
+import PreferencesModal from "./preferences-modal";
 import QuickNotesView, { type QuickNote } from "./quick-notes";
+import LoadingScreen from "./loading-screen";
+import { useLoadingScreen } from "@/hooks/use-loading-screen";
+import { startTeleportLoading } from "@/lib/loading-screen";
+import { setTheme, type Theme } from "@/lib/theme";
 
 type WorkspaceItem = {
   id: string;
@@ -24,7 +29,7 @@ type SessionItem = {
   isCurrent: boolean;
 };
 
-type WorkspaceTag = "active" | "board" | "canvas";
+
 type View = "dashboard" | "templates" | "quick-notes";
 type TemplateType = "todo" | "expense" | "notes";
 
@@ -123,32 +128,7 @@ function initials(name: string) {
   return parts.map((part) => part[0] ?? "").join("").toUpperCase();
 }
 
-function getTags(name: string, cards: number): WorkspaceTag[] {
-  const lower = name.toLowerCase();
-  const tags: WorkspaceTag[] = [];
 
-  if (cards > 0 || lower.includes("dsa") || lower.includes("transaction")) {
-    tags.push("active");
-  }
-
-  if (
-    lower.includes("dev") ||
-    lower.includes("tracker") ||
-    lower.includes("transaction") ||
-    lower.includes("dsa")
-  ) {
-    tags.push("board");
-  }
-
-  if (lower.includes("poem") || lower.includes("note") || lower.includes("canvas")) {
-    tags.push("canvas");
-  }
-
-  if (tags.length === 0) tags.push("board");
-  if (!tags.includes("canvas") && cards >= 6) tags.push("canvas");
-
-  return tags;
-}
 
 function getThemeAccent(theme: string) {
   if (theme.startsWith("color:")) {
@@ -184,6 +164,12 @@ function getBackground(theme: string, index: number) {
 export default function DashboardPolished() {
   const router = useRouter();
   const { data: session, status } = useSession();
+  const {
+    isVisible: isLoaderVisible,
+    isExiting: isLoaderExiting,
+    workspaceName: loaderWorkspaceName,
+    variant: loaderVariant,
+  } = useLoadingScreen(status === "loading");
 
   const userName = session?.user?.name || session?.user?.email || "Notes User";
   const userEmail = session?.user?.email || "you@example.com";
@@ -199,7 +185,7 @@ export default function DashboardPolished() {
   const [templateSubView, setTemplateSubView] = useState<TemplateType | null>(null);
 
   const [searchValue, setSearchValue] = useState("");
-  const [workspaceFilter, setWorkspaceFilter] = useState<"all" | WorkspaceTag>("all");
+  const [workspaceFilter, setWorkspaceFilter] = useState<string | null>(null);
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifVisible, setNotifVisible] = useState(true);
@@ -208,6 +194,7 @@ export default function DashboardPolished() {
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [newWorkspaceColor, setNewWorkspaceColor] = useState("#C07850");
   const [isCreating, setIsCreating] = useState(false);
+  const wsColorPickerRef = useRef<HTMLInputElement | null>(null);
 
   const [templateOpen, setTemplateOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateItem | null>(null);
@@ -301,17 +288,27 @@ export default function DashboardPolished() {
 
   // Profile modal state
   const [profileModalVisible, setProfileModalVisible] = useState(false);
-  const [profileSettings, setProfileSettings] = useState<ProfileSettings>({
-    avatarMode: "placeholder",
-    avatarUrl: "",
-    displayName: "",
-    email: "",
-    emailVerified: false,
-    showEmail: false,
-    timezone: "UTC",
-    emailNotifications: true,
-    twoFactorEnabled: false,
-    twoFactorMethod: "authenticator",
+  const [preferencesModalVisible, setPreferencesModalVisible] = useState(false);
+  const [profileSettings, setProfileSettings] = useState<ProfileSettings>(() => {
+    let defaultTimezone = "UTC";
+    try {
+      defaultTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+    } catch {}
+    
+    return {
+      avatarMode: "placeholder",
+      avatarUrl: "",
+      displayName: "",
+      email: "",
+      emailVerified: false,
+      showEmail: false,
+      timezone: defaultTimezone,
+      emailNotifications: true,
+      twoFactorEnabled: false,
+      twoFactorMethod: "authenticator",
+      theme: "standard",
+      dashboardBackground: null,
+    };
   });
   const [passwordForm, setPasswordForm] = useState<PasswordForm>({
     currentPassword: "",
@@ -359,7 +356,13 @@ export default function DashboardPolished() {
           ...(data.avatarUrl !== undefined && { avatarUrl: data.avatarUrl }),
           ...(data.displayName !== undefined && { displayName: data.displayName }),
           ...(data.showEmail !== undefined && { showEmail: data.showEmail }),
+          ...(data.theme !== undefined && { theme: data.theme }),
+          ...(data.dashboardBackground !== undefined && { dashboardBackground: data.dashboardBackground }),
         }));
+        // Sync body class immediately so all CSS inherits the theme
+        if (data.theme) {
+          setTheme(data.theme as Theme);
+        }
       })
       .catch((err) => console.error("Error loading profile settings:", err));
   }, [status]);
@@ -402,14 +405,20 @@ export default function DashboardPolished() {
     } else {
       setProfileSettings((prev) => ({ ...prev, ...updates }));
       
-      // Extract only the fields we actually want to save to the database profile table
-      const { avatarMode, avatarUrl, displayName, showEmail } = updates;
+      const { avatarMode, avatarUrl, displayName, showEmail, theme, dashboardBackground } = updates;
       
+      // Sync body theme class immediately
+      if (theme) {
+        setTheme(theme as Theme);
+      }
+
       const payload: Record<string, any> = {};
       if (avatarMode !== undefined) payload.avatarMode = avatarMode;
       if (avatarUrl !== undefined) payload.avatarUrl = avatarUrl;
       if (displayName !== undefined) payload.displayName = displayName;
       if (showEmail !== undefined) payload.showEmail = showEmail;
+      if (theme !== undefined) payload.theme = theme;
+      if (dashboardBackground !== undefined) payload.dashboardBackground = dashboardBackground;
 
       if (Object.keys(payload).length > 0) {
         fetch("/api/profile", {
@@ -556,12 +565,21 @@ export default function DashboardPolished() {
     []
   );
 
+  const wsColorFilters = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const ws of workspaces) {
+      const accent = getThemeAccent(ws.theme);
+      if (!seen.has(accent)) seen.set(accent, accent);
+    }
+    return Array.from(seen.values());
+  }, [workspaces]);
+
   const filteredWorkspaces = useMemo(() => {
     const q = searchValue.trim().toLowerCase();
 
     return workspaces.filter((workspace) => {
-      const tags = getTags(workspace.name, workspace._count?.cards ?? 0);
-      const filterMatch = workspaceFilter === "all" || tags.includes(workspaceFilter);
+      const accent = getThemeAccent(workspace.theme);
+      const filterMatch = !workspaceFilter || accent === workspaceFilter;
       const searchMatch = !q || workspace.name.toLowerCase().includes(q);
 
       return filterMatch && searchMatch;
@@ -744,41 +762,32 @@ export default function DashboardPolished() {
     return () => window.clearTimeout(timer);
   }, [templateSubView, view]);
 
-  /** Seed template columns and starter cards after workspace creation. */
+  /** Seed template columns and starter cards after workspace creation (single batch API call). */
   async function seedTemplateWorkspace(workspaceId: string, templateId: TemplateType) {
     const seed = TEMPLATE_SEEDS[templateId];
     if (!seed) return;
 
-    // Create columns sequentially (order matters for orderIndex)
-    const columnIds: string[] = [];
-    for (const colName of seed.columns) {
-      try {
-        const res = await fetch(`/api/workspaces/${workspaceId}/columns`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: colName }),
-        });
-        const data = (await res.json().catch(() => null)) as { column?: { id: string } } | null;
-        columnIds.push(data?.column?.id ?? "");
-      } catch {
-        columnIds.push("");
-      }
-    }
-
-    // Create starter cards in parallel to speed up seeding
-    const cardCount = { cards: seed.cards.length, columns: seed.columns.length };
-    const cardPromises = seed.cards.map(async (card) => {
-      const colId = columnIds[card.columnIndex];
-      if (!colId) return;
-      return fetch(`/api/workspaces/${workspaceId}/cards`, {
+    try {
+      const res = await fetch("/api/workspaces/seed", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: card.title, columnId: colId }),
-      }).catch(() => null);
-    });
-    await Promise.all(cardPromises);
+        body: JSON.stringify({
+          workspaceId,
+          columns: seed.columns,
+          cards: seed.cards,
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        console.error("Seed failed:", errData?.error);
+      }
+    } catch {
+      console.error("Seed request failed");
+    }
 
     // Update the workspace card/column counts in local state
+    const cardCount = { cards: seed.cards.length, columns: seed.columns.length };
     setWorkspaces((current) =>
       current.map((ws) =>
         ws.id === workspaceId
@@ -910,6 +919,7 @@ export default function DashboardPolished() {
       return;
     }
 
+    startTeleportLoading({ workspaceName: workspace.name });
     router.push(`/dashboard/${workspace.id}`);
   }
 
@@ -958,17 +968,30 @@ export default function DashboardPolished() {
     setTemplateOpen(false);
   }
 
-  if (status === "loading") {
+  if (isLoaderVisible) {
     return (
-      <div className="min-h-screen bg-[linear-gradient(180deg,#e8e2d9_0%,#dfd5c8_100%)] px-6 py-10 text-[#5c5752]">
-        Loading workspace...
-      </div>
+      <LoadingScreen
+        exiting={isLoaderExiting}
+        workspaceName={loaderWorkspaceName}
+        variant={loaderVariant}
+      />
     );
   }
 
   return (
     <>
-      <div className="app-root">
+      <div className="app-root transition-colors duration-500">
+        {profileSettings.dashboardBackground && (
+          <div 
+            className="absolute inset-0 z-0 opacity-40 transition-opacity duration-700 pointer-events-none"
+            style={{ 
+              backgroundImage: `url(${profileSettings.dashboardBackground})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              filter: profileSettings.theme === 'dark' ? 'brightness(0.6) contrast(1.2)' : 'none'
+            }}
+          />
+        )}
         <div className="ambient">
           <div className="orb orb1" />
           <div className="orb orb2" />
@@ -1041,7 +1064,7 @@ export default function DashboardPolished() {
                   setMobileSidebarOpen(false);
                 }}
               >
-                <div className="sb-icon" style={{ background: "rgba(122,106,160,0.12)" }}>✎</div>
+                <div className="sb-icon" style={{ background: "var(--accent-l)" }}>✎</div>
                 <span className="sb-lbl">Quick Notes</span>
               </button>
 
@@ -1051,7 +1074,7 @@ export default function DashboardPolished() {
                 className={`sb-item ${view === "templates" && templateSubView === "todo" ? "active" : ""}`}
                 onClick={() => handleSidebarTemplateNav("todo")}
               >
-                <div className="sb-icon" style={{ background: "rgba(192,120,80,0.12)" }}>✓</div>
+                <div className="sb-icon" style={{ background: "var(--accent-l)" }}>✓</div>
                 <span className="sb-lbl">To-Do Manager</span>
                 <span className="tmpl-badge">tmpl</span>
               </button>
@@ -1060,7 +1083,7 @@ export default function DashboardPolished() {
                 className={`sb-item ${view === "templates" && templateSubView === "expense" ? "active" : ""}`}
                 onClick={() => handleSidebarTemplateNav("expense")}
               >
-                <div className="sb-icon" style={{ background: "rgba(90,138,106,0.12)" }}>₹</div>
+                <div className="sb-icon" style={{ background: "var(--accent-l)" }}>₹</div>
                 <span className="sb-lbl">Expense Tracker</span>
                 <span className="tmpl-badge">tmpl</span>
               </button>
@@ -1069,7 +1092,7 @@ export default function DashboardPolished() {
                 className={`sb-item ${view === "templates" && templateSubView === "notes" ? "active" : ""}`}
                 onClick={() => handleSidebarTemplateNav("notes")}
               >
-                <div className="sb-icon" style={{ background: "rgba(90,122,154,0.12)" }}>✎</div>
+                <div className="sb-icon" style={{ background: "var(--accent-l)" }}>✎</div>
                 <span className="sb-lbl">Notes Manager</span>
                 <span className="tmpl-badge">tmpl</span>
               </button>
@@ -1081,9 +1104,10 @@ export default function DashboardPolished() {
                   className="sb-item"
                   type="button"
                   onClick={() => handleOpenWorkspace(workspace)}
+                  onMouseEnter={() => router.prefetch(`/dashboard/${workspace.id}`)}
                   aria-busy={pendingWorkspaceIds.has(workspace.id)}
                 >
-                  <div className="sb-icon" style={{ background: "rgba(90,122,154,0.12)" }}>
+                  <div className="sb-icon" style={{ background: "var(--accent-l)" }}>
                     <div className="ws-dot-sb" style={{ background: getThemeAccent(workspace.theme) }} />
                   </div>
                   <span className="sb-lbl">{workspace.name}</span>
@@ -1092,13 +1116,53 @@ export default function DashboardPolished() {
             </div>
 
             <div className="sidebar-footer">
-              <button className="user-card" type="button" onClick={() => setToast("Profile settings coming soon")}>
-                <div className="user-av">{initials(userName).slice(0, 1)}</div>
-                <div className="user-info-sb">
-                  <div className="user-name">{userName}</div>
-                  <div className="user-plan">Basic plan</div>
+              <div ref={profileWrapRef} style={{ position: "relative" }}>
+                <button
+                  className="user-card"
+                  type="button"
+                  onClick={() => setProfileOpen((current) => !current)}
+                >
+                  <div className="user-av">{initials(userName).slice(0, 1)}</div>
+                  {!sidebarCollapsed && (
+                    <div className="user-info-sb">
+                      <div className="user-name">{userName}</div>
+                      <div className="user-plan">Basic plan</div>
+                    </div>
+                  )}
+                </button>
+
+                <div className={`profile-dropdown ${profileOpen ? "open" : ""}`} style={{ bottom: "calc(100% + 10px)", top: "auto", right: sidebarCollapsed ? "-200px" : "0", left: "0" }}>
+                  <div className="pd-header">
+                    <div className="pd-av">{initials(userName).slice(0, 1)}</div>
+                    <div>
+                      <div className="pd-name">{userName}</div>
+                      <div className="pd-email">{userEmail}</div>
+                      <div className="pd-plan">Basic</div>
+                    </div>
+                  </div>
+                  <div className="pd-section">
+                    <button className="pd-item" type="button" onClick={() => { setProfileModalVisible(true); setProfileOpen(false); }}>
+                      <div className="pd-item-icon">👤</div>
+                      Profile Settings
+                    </button>
+                    <button className="pd-item" type="button" onClick={() => { setPreferencesModalVisible(true); setProfileOpen(false); }}>
+                      <div className="pd-item-icon">⚙️</div>
+                      Preferences
+                    </button>
+                    <button className="pd-item" type="button" onClick={() => { setToast("Keyboard shortcuts"); setProfileOpen(false); }}>
+                      <div className="pd-item-icon">⌨</div>
+                      Shortcuts
+                    </button>
+                  </div>
+                  <div className="pd-divider" />
+                  <div className="pd-section" style={{ paddingTop: 4 }}>
+                    <button className="pd-item danger" type="button" onClick={() => void signOut({ callbackUrl: "/auth/sign-in" })}>
+                      <div className="pd-item-icon">🚪</div>
+                      Sign Out
+                    </button>
+                  </div>
                 </div>
-              </button>
+              </div>
             </div>
           </aside>
 
@@ -1172,52 +1236,17 @@ export default function DashboardPolished() {
                 <span>New Workspace</span>
               </button>
 
-              <div ref={profileWrapRef} style={{ position: "relative" }}>
-                <button className="profile-btn" id="profileBtn" type="button" onClick={() => setProfileOpen((current) => !current)}>
-                  {initials(userName).slice(0, 1)}
-                  <div className="online-dot" />
+              <div className="header-actions" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <button 
+                  className="notif-btn" 
+                  type="button" 
+                  onClick={() => { setToast("No new notifications"); setNotifVisible(false); }}
+                  title="Notifications"
+                >
+                  <span style={{ fontSize: "16px" }}>🔔</span>
                   {notifVisible ? <div className="notif-badge" /> : null}
                 </button>
 
-                <div className={`profile-dropdown ${profileOpen ? "open" : ""}`}>
-                  <div className="pd-header">
-                    <div className="pd-av">{initials(userName).slice(0, 1)}</div>
-                    <div>
-                      <div className="pd-name">{userName}</div>
-                      <div className="pd-email">{userEmail}</div>
-                      <div className="pd-plan">Basic</div>
-                    </div>
-                  </div>
-                  <div className="pd-section">
-                    <button className="pd-item" type="button" onClick={() => { setProfileModalVisible(true); setProfileOpen(false); }}>
-                      <div className="pd-item-icon">👤</div>
-                      Profile Settings
-                    </button>
-                    <button className="pd-item" type="button" onClick={() => { setToast("Opening preferences..."); setProfileOpen(false); }}>
-                      <div className="pd-item-icon">⚙️</div>
-                      Preferences
-                    </button>
-                    <button className="pd-item" type="button" onClick={() => { setToast("No new notifications"); setNotifVisible(false); setProfileOpen(false); }}>
-                      <div className="pd-item-icon">🔔</div>
-                      Notifications
-                    </button>
-                    <button className="pd-item" type="button" onClick={() => { setToast("Keyboard shortcuts"); setProfileOpen(false); }}>
-                      <div className="pd-item-icon">⌨</div>
-                      Shortcuts
-                    </button>
-                    <button className="pd-item" type="button" onClick={handleShowDevicePanel}>
-                      <div className="pd-item-icon">📱</div>
-                      Devices (3)
-                    </button>
-                  </div>
-                  <div className="pd-divider" />
-                  <div className="pd-section" style={{ paddingTop: 4 }}>
-                    <button className="pd-item danger" type="button" onClick={() => void signOut({ callbackUrl: "/auth/sign-in" })}>
-                      <div className="pd-item-icon">🚪</div>
-                      Sign Out
-                    </button>
-                  </div>
-                </div>
               </div>
             </div>
 
@@ -1264,15 +1293,22 @@ export default function DashboardPolished() {
                 </div>
 
                 <div className="filter-row">
-                  {(["all", "active", "board", "canvas"] as const).map((tag) => (
+                  <button
+                    type="button"
+                    className={`wsf-all ${!workspaceFilter ? "active" : ""}`}
+                    onClick={() => setWorkspaceFilter(null)}
+                  >
+                    All
+                  </button>
+                  {wsColorFilters.map((hex) => (
                     <button
-                      key={tag}
+                      key={hex}
                       type="button"
-                      className={`chip ${workspaceFilter === tag ? "active" : ""}`}
-                      onClick={() => setWorkspaceFilter(tag)}
-                    >
-                      {tag === "all" ? "All" : tag[0].toUpperCase() + tag.slice(1)}
-                    </button>
+                      className={`wsf-dot ${workspaceFilter === hex ? "active" : ""}`}
+                      style={{ background: hex }}
+                      title={hex}
+                      onClick={() => setWorkspaceFilter(workspaceFilter === hex ? null : hex)}
+                    />
                   ))}
                 </div>
 
@@ -1281,7 +1317,6 @@ export default function DashboardPolished() {
                     {filteredWorkspaces.map((workspace, index) => {
                       const cards = workspace._count?.cards ?? 0;
                       const cols = workspace._count?.columns ?? 0;
-                      const tags = getTags(workspace.name, cards);
                       const isPending = pendingWorkspaceIds.has(workspace.id);
 
                       return (
@@ -1291,6 +1326,7 @@ export default function DashboardPolished() {
                           tabIndex={0}
                           className={`ws-card ${isPending ? "pending" : ""}`}
                           onClick={() => handleOpenWorkspace(workspace)}
+                          onMouseEnter={() => router.prefetch(`/dashboard/${workspace.id}`)}
                           onKeyDown={(e) => {
                             if (e.key === "Enter" || e.key === " ") {
                               e.preventDefault();
@@ -1318,11 +1354,8 @@ export default function DashboardPolished() {
                           <div className="ws-info">
                             <div className="ws-meta-txt">{isPending ? "Creating..." : `${cards} cards · ${cols} cols`}</div>
                             <div className="ws-tags">
-                              {(isPending ? ["active"] : tags.slice(0, 2)).map((tag) => (
-                                <div key={`${workspace.id}-${tag}`} className={`wt ${tag === "active" ? "ta" : tag === "board" ? "tb" : "tc"}`}>
-                                  {isPending ? "New" : tag[0].toUpperCase() + tag.slice(1)}
-                                </div>
-                              ))}
+                              <div className="ws-color-dot" style={{ background: getThemeAccent(workspace.theme) }} />
+                              {isPending && <div className="wt ta">New</div>}
                             </div>
                           </div>
                         </div>
@@ -1556,6 +1589,27 @@ export default function DashboardPolished() {
                   onClick={() => setNewWorkspaceColor(color)}
                 />
               ))}
+              {!COLOR_SWATCHES.includes(newWorkspaceColor) && (
+                <button
+                  type="button"
+                  className="color-swatch sel"
+                  style={{ background: newWorkspaceColor }}
+                  onClick={() => wsColorPickerRef.current?.click()}
+                />
+              )}
+              <button
+                type="button"
+                className="color-swatch-add"
+                title="Pick a custom color"
+                onClick={() => wsColorPickerRef.current?.click()}
+              >+</button>
+              <input
+                ref={wsColorPickerRef}
+                type="color"
+                value={newWorkspaceColor}
+                onChange={(e) => setNewWorkspaceColor(e.target.value)}
+                style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0 }}
+              />
             </div>
             <div className="modal-actions">
               <button className="btn-cancel" type="button" onClick={() => setCreateOpen(false)}>Cancel</button>
@@ -1602,25 +1656,9 @@ export default function DashboardPolished() {
         *, *::before, *::after { box-sizing: border-box; }
 
         .app-root {
-          --bg: #ebe4da;
-          --bg2: #e3ddd4;
-          --surface: #f5f0e8;
-          --surface2: #fdfaf5;
-          --border: rgba(44, 38, 28, 0.07);
-          --border2: rgba(44, 38, 28, 0.12);
-          --text: #2c2018;
-          --text2: #6b6155;
-          --text3: #a09080;
-          --accent: #c07850;
-          --green: #5a8a6a;
-          --blue: #5a7a9a;
-          --rose: #a06878;
-          --frame: #6ba3be;
-          --shadow: 0 2px 20px rgba(44, 38, 28, 0.09);
-          --shadow-lg: 0 8px 48px rgba(44, 38, 28, 0.14);
-          --shadow-card: 0 4px 28px rgba(44, 38, 28, 0.11);
-          --r: 16px;
-          --r-lg: 22px;
+          /* All CSS variables (--bg, --text, --surface, etc.) are defined
+             in themes.css on body.theme-standard / dark / space.
+             This element inherits them automatically. */
           --sb: 230px;
           --sb-col: 62px;
           height: 100vh;
@@ -1672,7 +1710,7 @@ export default function DashboardPolished() {
           height: 320px;
           left: -120px;
           bottom: -100px;
-          border: 1.5px solid rgba(192, 120, 80, 0.08);
+          border: 1.5px solid var(--accent-l);
         }
 
         .deco-ring2 {
@@ -1680,7 +1718,7 @@ export default function DashboardPolished() {
           height: 200px;
           right: -60px;
           top: 100px;
-          border: 1px solid rgba(107, 163, 190, 0.07);
+          border: 1px solid var(--accent-l);
           animation-duration: 9s;
           animation-delay: -3s;
         }
@@ -1694,7 +1732,7 @@ export default function DashboardPolished() {
           border-right: 1px solid var(--border2);
           display: flex;
           flex-direction: column;
-          overflow: hidden;
+
           transition: width 0.3s cubic-bezier(0.22, 1, 0.36, 1), transform 0.3s;
           position: relative;
           z-index: 20;
@@ -1791,10 +1829,30 @@ export default function DashboardPolished() {
           padding: 10px 10px 4px;
           overflow: hidden;
           white-space: nowrap;
+          transition: color 0.2s;
+          position: relative;
+        }
+
+        .sb-section-lbl::after {
+          content: "";
+          position: absolute;
+          left: 2px;
+          right: 2px;
+          top: calc(50% + 3px);
+          height: 1px;
+          background: var(--border2);
+          opacity: 0;
           transition: opacity 0.2s;
         }
 
-        .sidebar.collapsed .sb-section-lbl { opacity: 0; pointer-events: none; }
+        .sidebar.collapsed .sb-section-lbl { 
+          color: transparent; 
+          pointer-events: none; 
+        }
+
+        .sidebar.collapsed .sb-section-lbl::after {
+          opacity: 1;
+        }
 
         .sb-item {
           display: flex;
@@ -1809,25 +1867,32 @@ export default function DashboardPolished() {
           transition: all 0.15s;
           position: relative;
           white-space: nowrap;
-          min-height: 38px;
+          min-height: 40px;
           border: none;
           background: transparent;
           text-align: left;
+          justify-content: flex-start;
         }
+
+        .sidebar.collapsed .sb-item {
+          padding: 8px 0;
+          justify-content: center;
+          gap: 0;
+        }
+
 
         .sb-item:hover { background: var(--bg2); color: var(--text); }
-        .sb-item.active { background: rgba(192, 120, 80, 0.1); color: var(--text); }
+        .sb-item.active { background: var(--accent-l); color: var(--text); }
 
-        .sb-item.active::before {
-          content: "";
-          position: absolute;
-          left: 0;
-          top: 18%;
-          bottom: 18%;
-          width: 3px;
-          border-radius: 0 3px 3px 0;
           background: var(--accent);
         }
+
+        .sidebar.collapsed .sb-item.active::before {
+          top: 25%;
+          bottom: 25%;
+          width: 3.5px;
+        }
+
 
         .sb-icon {
           width: 28px;
@@ -1854,7 +1919,7 @@ export default function DashboardPolished() {
           font-size: 8px;
           padding: 2px 6px;
           border-radius: 6px;
-          background: rgba(90, 122, 154, 0.12);
+          background: var(--accent-l);
           color: var(--blue);
           font-family: "Syne", sans-serif;
           font-weight: 700;
@@ -1864,7 +1929,7 @@ export default function DashboardPolished() {
           transition: opacity 0.2s;
         }
 
-        .sidebar.collapsed .tmpl-badge { opacity: 0; pointer-events: none; }
+        .sidebar.collapsed .tmpl-badge { opacity: 0; max-width: 0; padding: 0; margin: 0; pointer-events: none; overflow: hidden; }
 
         .sidebar-footer { padding: 10px 8px; border-top: 1px solid var(--border); flex-shrink: 0; }
 
@@ -1910,7 +1975,7 @@ export default function DashboardPolished() {
         .topbar {
           height: 58px;
           flex-shrink: 0;
-          background: rgba(245, 240, 232, 0.88);
+          background: var(--surface);
           backdrop-filter: blur(12px);
           border-bottom: 1px solid var(--border2);
           display: flex;
@@ -1960,7 +2025,7 @@ export default function DashboardPolished() {
           position: relative;
         }
 
-        .device-icon.synced { border-color: rgba(90, 138, 106, 0.3); background: rgba(90, 138, 106, 0.07); }
+        .device-icon.synced { border-color: var(--green); background: var(--accent-l); }
         .device-icon.synced::after {
           content: "";
           position: absolute;
@@ -2028,14 +2093,14 @@ export default function DashboardPolished() {
           flex-shrink: 0;
         }
 
-        .new-btn:hover { background: #3d3025; transform: translateY(-1px); }
+        .new-btn:hover { opacity: 0.85; transform: translateY(-1px); }
 
         .profile-btn {
           width: 32px;
           height: 32px;
           border-radius: 50%;
           background: linear-gradient(135deg, var(--accent), var(--rose));
-          border: 2px solid rgba(255, 255, 255, 0.6);
+          border: 2px solid var(--border);
           cursor: pointer;
           flex-shrink: 0;
           display: flex;
@@ -2046,7 +2111,7 @@ export default function DashboardPolished() {
           font-weight: 700;
           color: white;
           position: relative;
-          box-shadow: 0 2px 10px rgba(192, 120, 80, 0.3);
+          box-shadow: var(--shadow);
         }
 
         .online-dot {
@@ -2061,15 +2126,35 @@ export default function DashboardPolished() {
           animation: pulse 2.5s ease-in-out infinite;
         }
 
+        .notif-btn {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          background: var(--surface);
+          border: 1px solid var(--border2);
+          cursor: pointer;
+          flex-shrink: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          position: relative;
+          transition: all 0.15s;
+        }
+
+        .notif-btn:hover {
+          background: var(--bg2);
+          transform: translateY(-1px);
+        }
+
         .notif-badge {
           position: absolute;
           top: -2px;
           right: -2px;
-          width: 8px;
-          height: 8px;
+          width: 10px;
+          height: 10px;
           border-radius: 50%;
           background: var(--rose);
-          border: 1.5px solid var(--surface);
+          border: 2px solid var(--surface);
         }
 
         .profile-dropdown {
@@ -2087,7 +2172,7 @@ export default function DashboardPolished() {
           pointer-events: none;
           transform: translateY(-6px) scale(0.97);
           transition: opacity 0.2s, transform 0.2s;
-          transform-origin: top right;
+          transform-origin: bottom left;
         }
 
         .profile-dropdown.open { opacity: 1; pointer-events: auto; transform: none; }
@@ -2117,7 +2202,7 @@ export default function DashboardPolished() {
           font-weight: 700;
           padding: 2px 7px;
           border-radius: 6px;
-          background: rgba(192, 120, 80, 0.1);
+          background: var(--accent-l);
           color: var(--accent);
           font-family: "Syne", sans-serif;
           letter-spacing: 0.06em;
@@ -2157,6 +2242,10 @@ export default function DashboardPolished() {
 
         .pd-divider { height: 1px; background: var(--border); margin: 2px 0; }
         .pd-item.danger { color: var(--rose); }
+
+        .sidebar-body { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 12px; }
+        .sidebar-body::-webkit-scrollbar { width: 4px; }
+        .sidebar-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
         .content { flex: 1; overflow-y: auto; padding: 22px 26px; }
         .content::-webkit-scrollbar { width: 4px; }
@@ -2234,30 +2323,42 @@ export default function DashboardPolished() {
 
         .section-action { margin-left: auto; font-size: 11px; color: var(--blue); cursor: pointer; }
 
-        .filter-row { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+        .filter-row { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
 
-        .chip {
-          padding: 5px 14px;
-          border-radius: 20px;
-          font-size: 11px;
-          font-weight: 600;
-          font-family: "Syne", sans-serif;
-          letter-spacing: 0.06em;
-          cursor: pointer;
+        .wsf-all {
+          padding: 4px 12px;
+          border-radius: 14px;
           border: 1px solid var(--border2);
           background: var(--surface);
+          font-family: "Syne", sans-serif;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.06em;
           color: var(--text3);
-          transition: all 0.15s;
+          cursor: pointer;
           text-transform: uppercase;
+          transition: all 0.15s;
         }
+        .wsf-all.active { background: var(--text); color: var(--surface2); border-color: var(--text); }
 
-        .chip.active { background: var(--text); color: var(--surface2); border-color: var(--text); }
+        .wsf-dot {
+          width: 22px;
+          height: 22px;
+          border-radius: 50%;
+          border: 2.5px solid transparent;
+          cursor: pointer;
+          transition: all 0.15s;
+          flex-shrink: 0;
+          padding: 0;
+        }
+        .wsf-dot.active { border-color: var(--text); transform: scale(1.18); box-shadow: 0 0 0 2px var(--border2); }
+        .wsf-dot:hover { transform: scale(1.12); }
 
         .ws-frame {
           border: 2px solid var(--frame);
           border-radius: var(--r-lg);
           padding: 20px;
-          background: rgba(255, 255, 255, 0.4);
+          background: var(--surface);
           margin-bottom: 26px;
           position: relative;
           overflow: hidden;
@@ -2303,9 +2404,9 @@ export default function DashboardPolished() {
           text-align: left;
         }
 
-        .ws-card:hover { transform: translateY(-5px) scale(1.014); box-shadow: 0 14px 52px rgba(44, 38, 28, 0.17); }
+        .ws-card:hover { transform: translateY(-5px) scale(1.014); box-shadow: var(--shadow-lg); }
         .ws-card.pending { cursor: progress; }
-        .ws-card.pending .ws-overlay { background: linear-gradient(180deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.62) 100%); }
+        .ws-card.pending .ws-overlay { background: var(--bg2); opacity: 0.5; }
 
         .ws-delete-btn {
           position: absolute;
@@ -2314,8 +2415,8 @@ export default function DashboardPolished() {
           width: 24px;
           height: 24px;
           border-radius: 6px;
-          background: rgba(255, 255, 255, 0.8);
-          border: 1px solid rgba(0, 0, 0, 0.1);
+          background: var(--surface2);
+          border: 1px solid var(--border);
           color: var(--text);
           font-size: 16px;
           line-height: 1;
@@ -2335,17 +2436,16 @@ export default function DashboardPolished() {
         .ws-overlay {
           position: absolute;
           inset: 0;
-          background: linear-gradient(180deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.46) 50%, rgba(255, 255, 255, 0.58) 100%);
+          background: linear-gradient(180deg, transparent 0%, var(--bg2) 100%);
           backdrop-filter: blur(1px);
         }
 
         .ws-label-wrap { position: absolute; top: 0; left: 0; right: 0; padding: 14px 14px 10px; }
 
         .ws-label {
-          display: inline-block;
-          background: rgba(255, 255, 255, 0.72);
+          background: var(--surface2);
           backdrop-filter: blur(8px);
-          border: 1px solid rgba(255, 255, 255, 0.88);
+          border: 1px solid var(--border);
           padding: 5px 14px;
           border-radius: 11px;
           font-family: "Syne", sans-serif;
@@ -2354,7 +2454,7 @@ export default function DashboardPolished() {
           letter-spacing: 0.1em;
           color: var(--text);
           text-transform: uppercase;
-          box-shadow: 0 2px 10px rgba(44, 38, 28, 0.06);
+          box-shadow: var(--shadow);
         }
 
         .ws-accent-strip { position: absolute; top: 0; left: 0; right: 0; height: 3px; }
@@ -2365,14 +2465,21 @@ export default function DashboardPolished() {
           left: 0;
           right: 0;
           padding: 10px 14px;
-          background: linear-gradient(0deg, rgba(255, 255, 255, 0.88) 0%, transparent 100%);
+          background: linear-gradient(0deg, var(--bg) 0%, transparent 100%);
           display: flex;
           align-items: flex-end;
           justify-content: space-between;
         }
 
         .ws-meta-txt { font-size: 10px; color: var(--text3); font-weight: 500; }
-        .ws-tags { display: flex; gap: 5px; }
+        .ws-tags { display: flex; gap: 5px; align-items: center; }
+
+        .ws-color-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          flex-shrink: 0;
+        }
 
         .wt {
           font-size: 8.5px;
@@ -2384,16 +2491,14 @@ export default function DashboardPolished() {
           font-family: "Syne", sans-serif;
         }
 
-        .wt.ta { background: rgba(90, 138, 106, 0.14); color: var(--green); border: 1px solid rgba(90, 138, 106, 0.22); }
-        .wt.tb { background: rgba(90, 122, 154, 0.12); color: var(--blue); border: 1px solid rgba(90, 122, 154, 0.18); }
-        .wt.tc { background: rgba(160, 104, 120, 0.12); color: var(--rose); border: 1px solid rgba(160, 104, 120, 0.18); }
+        .wt.ta { background: var(--accent-l); color: var(--green); border: 1px solid var(--green); }
 
         .ws-add {
           border-radius: 20px;
           cursor: pointer;
           aspect-ratio: 4 / 3;
-          border: 2px dashed rgba(44, 38, 28, 0.14);
-          background: rgba(255, 255, 255, 0.5);
+          border: 2px dashed var(--border2);
+          background: var(--surface);
           display: flex;
           flex-direction: column;
           align-items: center;
@@ -2402,12 +2507,12 @@ export default function DashboardPolished() {
           transition: all 0.25s;
         }
 
-        .ws-add:hover { border-color: var(--frame); background: rgba(107, 163, 190, 0.07); transform: translateY(-4px); }
+        .ws-add:hover { border-color: var(--frame); background: var(--accent-l); transform: translateY(-4px); }
         .ws-add-icon {
           width: 44px;
           height: 44px;
           border-radius: 50%;
-          border: 2px dashed rgba(44, 38, 28, 0.18);
+          border: 2px dashed var(--border2);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -2450,7 +2555,7 @@ export default function DashboardPolished() {
         .tmpl-row {
           height: 9px;
           border-radius: 6px;
-          background: rgba(44, 38, 28, 0.1);
+          background: var(--border2);
           animation: shimmerLoad 1.8s ease-in-out infinite;
         }
 
@@ -2497,6 +2602,29 @@ export default function DashboardPolished() {
         .device-panel-title { font-family: "Syne", sans-serif; font-weight: 700; font-size: 12px; color: var(--text); letter-spacing: 0.06em; text-transform: uppercase; }
         .sync-status { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--green); font-weight: 500; }
         .sync-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 2s ease-in-out infinite; }
+        
+        .user-card {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 8px 10px;
+          border-radius: 12px;
+          background: var(--bg2);
+          border: 1px solid var(--border);
+          cursor: pointer;
+          transition: all 0.2s;
+          text-align: left;
+          justify-content: flex-start;
+        }
+        .user-card:hover { background: var(--surface2); transform: translateY(-1px); box-shadow: var(--shadow); }
+        
+        .sidebar.collapsed .user-card {
+          padding: 8px 0;
+          justify-content: center;
+        }
+
+
         .device-list { padding: 8px; }
 
         .device-item {
@@ -2548,9 +2676,9 @@ export default function DashboardPolished() {
           flex-shrink: 0;
         }
 
-        .di-badge.current { background: rgba(107, 163, 190, 0.12); color: var(--blue); }
-        .di-badge.synced { background: rgba(90, 138, 106, 0.12); color: var(--green); }
-        .di-badge.offline { background: rgba(44, 38, 28, 0.07); color: var(--text3); }
+        .di-badge.current { background: var(--accent-l); color: var(--blue); }
+        .di-badge.synced { background: var(--accent-l); color: var(--green); }
+        .di-badge.offline { background: var(--border); color: var(--text3); }
 
         .di-sync-bar { width: 100%; height: 2px; background: var(--bg2); border-radius: 2px; margin-top: 6px; overflow: hidden; }
         .di-sync-fill { height: 100%; background: linear-gradient(90deg, var(--green), var(--frame)); border-radius: 2px; animation: syncPulse 2s ease-in-out infinite; }
@@ -2616,7 +2744,7 @@ export default function DashboardPolished() {
         .overlay {
           position: fixed;
           inset: 0;
-          background: rgba(44, 38, 28, 0.4);
+          background: rgba(0, 0, 0, 0.4);
           backdrop-filter: blur(6px);
           z-index: 100;
           display: none;
@@ -2680,6 +2808,22 @@ export default function DashboardPolished() {
         }
 
         .color-swatch.sel { border-color: var(--text); transform: scale(1.12); }
+        .color-swatch-add {
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          border: 2px dashed var(--border2);
+          background: none;
+          cursor: pointer;
+          font-size: 16px;
+          color: var(--text3);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.15s;
+          padding: 0;
+        }
+        .color-swatch-add:hover { border-color: var(--frame); color: var(--frame); transform: scale(1.08); }
         .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
 
         .btn-cancel {
@@ -2734,7 +2878,7 @@ export default function DashboardPolished() {
           display: none;
           position: fixed;
           inset: 0;
-          background: rgba(44, 38, 28, 0.3);
+          background: rgba(0, 0, 0, 0.3);
           backdrop-filter: blur(3px);
           z-index: 45;
         }
@@ -2791,8 +2935,8 @@ export default function DashboardPolished() {
         }
 
         @keyframes pulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(90, 138, 106, 0.5); }
-          50% { box-shadow: 0 0 0 4px rgba(90, 138, 106, 0); }
+          0%, 100% { box-shadow: 0 0 0 0 var(--border); }
+          50% { box-shadow: 0 0 0 4px transparent; }
         }
 
         @keyframes ringPulse {
@@ -2818,6 +2962,7 @@ export default function DashboardPolished() {
           0%, 100% { opacity: 0.6; }
           50% { opacity: 1; }
         }
+        /* Theme variable overrides are in themes.css — do not duplicate here */
       `}</style>
 
       <ProfileModal
@@ -2842,7 +2987,17 @@ export default function DashboardPolished() {
         onSendEmailOtp={handleSendEmailOtp}
         onConfirmEmailOtp={handleConfirmEmailOtp}
         isUpdating2FA={isUpdating2FA}
+        onOpenPreferences={() => setPreferencesModalVisible(true)}
       />
+
+      {preferencesModalVisible ? (
+        <PreferencesModal
+          isVisible={preferencesModalVisible}
+          profile={profileSettings}
+          onClose={() => setPreferencesModalVisible(false)}
+          onUpdateProfile={handleUpdateProfile}
+        />
+      ) : null}
     </>
   );
 }

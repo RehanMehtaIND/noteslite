@@ -5,27 +5,7 @@
 }
 
 .noteslite-workspace-container {
-  --bg: #E8E3DA;
-  --bg2: #EDE8DF;
-  --surface: #F4EFE7;
-  --surface2: #FAF7F2;
-  --border: rgba(44,38,28,0.09);
-  --border2: rgba(44,38,28,0.14);
-  --text: #2C2018;
-  --text2: #6B6155;
-  --text3: #A09080;
-  --accent: #C07850;
-  --accent-l: rgba(192,120,80,0.12);
-  --green: #5A8A6A;
-  --blue: #5A7A9A;
-  --rose: #A06878;
-  --gold: #B8963C;
-  --shadow: 0 2px 16px rgba(44,38,28,0.10);
-  --shadow-lg: 0 8px 48px rgba(44,38,28,0.15);
-  --r: 14px;
-  --r-sm: 8px;
-  --r-xs: 6px;
-
+  /* All CSS variables (--bg, --surface, --text, etc.) inherited from body.theme-* in themes.css */
   height: 100vh;
   width: 100vw;
   font-family: 'DM Sans', sans-serif;
@@ -147,7 +127,7 @@
 .noteslite-vtbtn.on {
   background: var(--surface2);
   color: var(--text);
-  box-shadow: 0 1px 6px rgba(44,38,28,.1);
+  box-shadow: var(--shadow);
 }
 
 .noteslite-tbtn {
@@ -177,7 +157,7 @@
   border-color: var(--text);
 }
 .noteslite-tbtn.primary:hover {
-  background: #3D3025;
+  opacity: 0.85;
 }
 
 /* ─── BOARD VIEW ─── */
@@ -423,7 +403,7 @@
 .noteslite-col-add-wrap:hover {
   border-color: var(--accent);
   color: var(--accent);
-  background: rgba(192,120,80,.04);
+  background: var(--accent-l);
 }
 .noteslite-col-add-wrap:hover .noteslite-add-col-icon { transform: rotate(90deg); }
 .noteslite-add-col-icon { font-size: 24px; transition: transform .3s; line-height: 1; }
@@ -434,7 +414,7 @@
   flex: 1;
   position: relative;
   overflow: hidden;
-  background-image: radial-gradient(circle, rgba(44,38,28,.1) 1px, transparent 1px);
+  background-image: radial-gradient(circle, var(--canvas-dot, rgba(44,38,28,.1)) 1px, transparent 1px);
   background-size: 22px 22px;
   cursor: grab;
 }
@@ -616,7 +596,7 @@
   padding: 6px 14px;
   border-radius: 8px;
   border: none;
-  background: rgba(244,239,232,.75);
+  background: var(--surface);
   backdrop-filter: blur(8px);
   font-size: 11px;
   font-weight: 600;
@@ -625,8 +605,8 @@
   color: var(--text);
   transition: all .15s;
 }
-.noteslite-cover-change-btn:hover { background: rgba(244,239,232,.95); }
-.noteslite-cover-emoji { position: absolute; bottom: -8px; left: 24px; font-size: 48px; filter: drop-shadow(0 4px 8px rgba(44,38,28,.15)); }
+.noteslite-cover-change-btn:hover { background: var(--surface2); }
+.noteslite-cover-emoji { position: absolute; bottom: -8px; left: 24px; font-size: 48px; filter: drop-shadow(var(--shadow)); }
 
 /* Card title */
 .noteslite-card-title-input {
@@ -673,7 +653,7 @@
   border-radius: var(--r-xs);
   position: relative;
 }
-.noteslite-block-row:hover { background: rgba(44,38,28,.02); }
+.noteslite-block-row:hover { background: var(--bg2); }
 
 .noteslite-block-handle {
   width: 18px;
@@ -759,7 +739,7 @@
 .noteslite-b-quote { border-left: 3px solid var(--accent); padding: 8px 0 8px 16px; margin: 4px 0; }
 .noteslite-b-quote textarea { width: 100%; background: none; border: none; outline: none; resize: none; font-family: 'Playfair Display', serif; font-style: italic; font-size: 15px; color: var(--text2); line-height: 1.7; min-height: 28px; }
 
-.noteslite-b-callout { background: var(--accent-l); border-radius: var(--r-sm); padding: 12px 14px; display: flex; gap: 10px; align-items: flex-start; border: 1px solid rgba(192,120,80,.2); margin: 4px 0; }
+.noteslite-b-callout { background: var(--accent-l); border-radius: var(--r-sm); padding: 12px 14px; display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--accent-l); margin: 4px 0; }
 .noteslite-b-callout-emoji { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
 .noteslite-b-callout-text { flex: 1; background: none; border: none; outline: none; resize: none; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--text); line-height: 1.7; min-height: 22px; }
 
@@ -814,7 +794,7 @@
 .noteslite-toast.show { opacity: 1; transform: none; }
 
 /* ─── Add Column Modal ─── */
-.noteslite-overlay { position: fixed; inset: 0; background: rgba(44,38,28,.3); backdrop-filter: blur(4px); z-index: 100; display: none; align-items: center; justify-content: center; }
+.noteslite-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.35); backdrop-filter: blur(4px); z-index: 100; display: none; align-items: center; justify-content: center; }
 .noteslite-overlay.show { display: flex; animation: fadeIn .2s both; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 .noteslite-modal { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 28px; width: 400px; box-shadow: var(--shadow-lg); animation: modalIn .3s cubic-bezier(.22,1,.36,1) both; }
@@ -823,9 +803,9 @@
 .noteslite-modal-sub { font-size: 12px; color: var(--text3); margin-bottom: 20px; }
 .noteslite-modal-label { font-size: 11px; font-weight: 600; letter-spacing: .08em; color: var(--text2); margin-bottom: 6px; font-family: 'Syne', sans-serif; }
 .noteslite-modal-input { width: 100%; height: 42px; border-radius: 50px; background: var(--bg2); border: 1.5px solid var(--border); padding: 0 16px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--text); outline: none; margin-bottom: 14px; transition: border-color .2s, box-shadow .2s; }
-.noteslite-modal-input:focus { border-color: rgba(44,38,28,.2); box-shadow: 0 0 0 4px rgba(192,120,80,.1); }
+.noteslite-modal-input:focus { border-color: var(--frame); box-shadow: 0 0 0 4px var(--accent-l); }
 .noteslite-modal-textarea { width: 100%; height: 70px; border-radius: 10px; background: var(--bg2); border: 1.5px solid var(--border); padding: 10px 16px; font-family: 'DM Sans', sans-serif; font-size: 12px; color: var(--text); outline: none; resize: none; margin-bottom: 14px; transition: border-color .2s; }
-.noteslite-modal-textarea:focus { border-color: rgba(44,38,28,.2); }
+.noteslite-modal-textarea:focus { border-color: var(--frame); }
 .noteslite-color-row { display: flex; gap: 8px; margin-bottom: 20px; }
 .noteslite-cswatch { width: 26px; height: 26px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: all .15s; }
 .noteslite-cswatch:hover { transform: scale(1.15); }
@@ -834,7 +814,7 @@
 .noteslite-btn-c { padding: 9px 18px; border-radius: 50px; border: 1px solid var(--border); background: none; font-family: 'Syne', sans-serif; font-size: 11px; font-weight: 600; color: var(--text2); cursor: pointer; transition: all .15s; }
 .noteslite-btn-c:hover { background: var(--bg2); }
 .noteslite-btn-ok { padding: 9px 22px; border-radius: 50px; border: none; background: var(--text); color: var(--surface2); font-family: 'Syne', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: .08em; cursor: pointer; transition: all .15s; }
-.noteslite-btn-ok:hover { background: #3D3025; box-shadow: 0 4px 14px rgba(44,38,28,.2); }
+.noteslite-btn-ok:hover { opacity: 0.85; box-shadow: 0 4px 14px rgba(0,0,0,.2); }
 
 /* ══════════════════════════════════════════
    CANVAS ENGINE
@@ -852,7 +832,7 @@
   font-family: 'Syne', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: .06em; color: var(--text2);
   display: inline-flex; align-items: center; gap: 5px;
 }
-.noteslite-cv-stat-chip.accent { background: var(--accent-l); color: var(--accent); border-color: rgba(192,120,80,.2); }
+.noteslite-cv-stat-chip.accent { background: var(--accent-l); color: var(--accent); border-color: var(--accent-l); }
 .noteslite-cv-stat-dot { width: 6px; height: 6px; border-radius: 50%; }
 
 .noteslite-cv-body { flex: 1; display: flex; overflow: hidden; }
@@ -884,7 +864,7 @@
 
 .noteslite-cv-frame {
   flex: 1; position: relative; overflow: hidden;
-  background-image: radial-gradient(circle, rgba(44,38,28,.1) 1px, transparent 1px);
+  background-image: radial-gradient(circle, var(--canvas-dot, rgba(44,38,28,.1)) 1px, transparent 1px);
   background-size: 24px 24px; cursor: grab; user-select: none; touch-action: none;
 }
 .noteslite-cv-frame.noteslite-cv-grabbing { cursor: grabbing; }
@@ -914,10 +894,10 @@
   display: flex; flex-direction: column; overflow: visible; transition: box-shadow .18s, border-color .18s;
 }
 .noteslite-cv-item.noteslite-cv-selected {
-  border-color: var(--accent); box-shadow: 0 0 0 2px rgba(192,120,80,.18), var(--shadow-lg);
+  border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-l), var(--shadow-lg);
 }
 .noteslite-cv-item.noteslite-cv-dragging-item {
-  box-shadow: 0 20px 56px rgba(44,38,28,.22) !important; border-color: var(--accent) !important; transition: none !important;
+  box-shadow: var(--shadow-lg) !important; border-color: var(--accent) !important; transition: none !important;
 }
 @keyframes cvItemIn { from { opacity: 0; transform: scale(.84); } to { opacity: 1; transform: scale(1); } }
 .noteslite-cv-item.noteslite-cv-new { animation: cvItemIn .38s cubic-bezier(.22,1,.36,1) both; }

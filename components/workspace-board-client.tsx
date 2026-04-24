@@ -3,8 +3,11 @@
 import { useMemo, useState, useEffect, useCallback, type CSSProperties, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
 
+import LoadingScreen from "@/components/loading-screen";
 import { BoardCard } from "@/components/workspace-board/board-card";
 import { BoardSidebar } from "@/components/workspace-board/board-sidebar";
+import { useLoadingScreen } from "@/hooks/use-loading-screen";
+import { startTeleportLoading } from "@/lib/loading-screen";
 import { useWorkspaceSync } from "@/hooks/use-workspace-sync";
 import { BLOCK_LABELS } from "@/components/workspace-board/constants";
 import type {
@@ -13,6 +16,7 @@ import type {
   CanvasViewMode,
   PaletteItem,
 } from "@/components/workspace-board/types";
+import { type ProfileSettings } from "@/components/profile-modal";
 import {
   addBlockToCard,
   clamp,
@@ -123,8 +127,8 @@ function DropGuide({ isVisible, isActive, label, onDragOver, onDrop }: DropGuide
         isVisible
           ? isActive
             ? "border-[color:var(--board-drag-guide-active)] bg-[var(--board-accent-soft)] shadow-[0_0_0_1px_var(--board-accent-glow)]"
-            : "border-[color:var(--board-drag-guide-passive)] bg-[rgba(255,255,255,0.5)]"
-          : "border-transparent bg-transparent hover:border-[color:var(--board-drag-guide-passive)] hover:bg-[rgba(255,255,255,0.5)]"
+            : "border-[color:var(--board-drag-guide-passive)] bg-[color:var(--board-panel-bg)]"
+          : "border-transparent bg-transparent hover:border-[color:var(--board-drag-guide-passive)] hover:bg-[color:var(--board-panel-bg)]"
       } ${isActive ? "scale-100 opacity-100" : "opacity-100"}`}
     >
       <span
@@ -151,7 +155,7 @@ function ColumnDropZone({ isVisible, isActive, label, onDragOver, onDrop }: Colu
           isVisible
             ? isActive
             ? "border-[color:var(--board-drag-guide-active)] bg-[var(--board-accent-soft)] shadow-[0_0_0_1px_var(--board-accent-glow)]"
-            : "border-[color:var(--board-drag-guide-passive)] bg-[rgba(255,255,255,0.42)]"
+            : "border-[color:var(--board-drag-guide-passive)] bg-[color:var(--board-panel-bg)]"
             : "opacity-0"
         }`}
       >
@@ -172,6 +176,12 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
 
   const [board, setBoard] = useState(() => createSeedBoard(workspaceId || "local-workspace"));
   const [isLoading, setIsLoading] = useState(true);
+  const {
+    isVisible: isLoaderVisible,
+    isExiting: isLoaderExiting,
+    workspaceName: loaderWorkspaceName,
+    variant: loaderVariant,
+  } = useLoadingScreen(isLoading);
   const [viewMode, setViewMode] = useState<CanvasViewMode>("board");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("New Workspace");
@@ -184,6 +194,20 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
   const [draggingColumnId, setDraggingColumnId] = useState<string | null>(null);
   const [activeDropKey, setActiveDropKey] = useState<string | null>(null);
   const [activeColumnDropIndex, setActiveColumnDropIndex] = useState<number | null>(null);
+  const [profile, setProfile] = useState<ProfileSettings | null>(null);
+
+  useEffect(() => {
+    fetch("/api/profile")
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        setProfile(data);
+        if (typeof document !== "undefined" && data?.theme) {
+          document.body.classList.remove("theme-standard", "theme-dark", "theme-space");
+          document.body.classList.add(`theme-${data.theme}`);
+        }
+      })
+      .catch(console.error);
+  }, []);
 
   const updateBoard = useCallback((updater: (current: BoardState) => BoardState) => {
     setBoard((current) => updater(current));
@@ -671,37 +695,40 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
     [],
   );
 
-  if (isLoading) {
+  if (isLoaderVisible) {
     return (
-      <div className="workspace-board-theme min-h-screen bg-[var(--board-canvas)] flex items-center justify-center text-[color:var(--board-text)]">
-        <div className="mx-auto max-w-md rounded-[28px] border border-[color:var(--board-shell-border)] bg-[var(--board-shell-bg)] p-8 shadow-[var(--board-shadow-shell)] backdrop-blur-xl text-center">
-          <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-[color:var(--board-text-soft)] border-t-transparent" />
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--board-text-soft)]">
-            Loading
-          </p>
-          <p className="mt-2 text-[20px] leading-tight tracking-[0.03em] text-[color:var(--board-text-strong)] [font-family:'Cormorant_Garamond','Times_New_Roman',serif]">
-            Preparing your workspace&hellip;
-          </p>
-        </div>
-      </div>
+      <LoadingScreen
+        exiting={isLoaderExiting}
+        workspaceName={loaderWorkspaceName}
+        variant={loaderVariant}
+      />
     );
   }
 
   return (
-    <div className="workspace-board-theme workspace-board-viewport fixed inset-0 overflow-hidden bg-[var(--board-canvas)] text-[color:var(--board-text)]">
+    <div className="workspace-board-viewport fixed inset-0 overflow-hidden transition-colors duration-500">
+      {profile?.dashboardBackground && (
+        <div 
+          className="workspace-board-bg-img"
+          style={{ backgroundImage: `url(${profile.dashboardBackground})` }}
+        />
+      )}
       <div
         className="workspace-board-stage absolute inset-[var(--board-fit-padding)]"
         style={boardStageStyle}
       >
         <div className="relative h-full w-full">
           <div className="relative h-full overflow-hidden rounded-[30px] border border-[color:var(--board-shell-border)] bg-[var(--board-shell-bg)] p-4 shadow-[var(--board-shadow-shell)] backdrop-blur-xl">
-            <div className="pointer-events-none absolute inset-x-0 top-0 h-44 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.82),transparent_58%)]" />
-            <div className="pointer-events-none absolute -right-20 top-10 h-48 w-48 rounded-full bg-[rgba(134,100,73,0.12)] blur-3xl" />
-            <div className="pointer-events-none absolute bottom-0 left-10 h-52 w-52 rounded-full bg-[rgba(86,106,132,0.08)] blur-3xl" />
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-44 bg-[radial-gradient(circle_at_top_left,var(--board-panel-bg),transparent_58%)]" />
+            <div className="pointer-events-none absolute -right-20 top-10 h-48 w-48 rounded-full bg-[color:var(--board-shell-bg)] blur-3xl" />
+            <div className="pointer-events-none absolute bottom-0 left-10 h-52 w-52 rounded-full bg-[color:var(--board-shell-bg)] blur-3xl" />
 
             <div className="relative grid h-full min-h-0 grid-cols-[176px_minmax(0,1fr)] items-stretch gap-5">
               <BoardSidebar
-                onBack={() => router.push("/dashboard")}
+                onBack={() => {
+                  startTeleportLoading({ workspaceName: "Dashboard" });
+                  router.push("/dashboard");
+                }}
                 onPaletteDragStart={onPaletteDragStart}
                 onPaletteDragEnd={onPaletteDragEnd}
                 onPaletteClick={onPaletteItemClick}
@@ -709,7 +736,7 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
               />
 
               <section className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[28px] border border-[color:var(--board-border)] bg-[var(--board-panel-bg)] px-4 pb-4 pt-4 shadow-[var(--board-shadow-panel)]">
-                <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.52),transparent_72%)]" />
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[radial-gradient(circle_at_top,var(--board-panel-bg),transparent_72%)]" />
 
                 <div className="relative flex min-h-0 flex-1 flex-col">
                   <WorkspaceHeader
@@ -767,10 +794,10 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
                               }}
                               className={`relative flex h-full min-h-0 max-h-full w-[var(--board-column-width)] shrink-0 flex-none flex-col overflow-hidden rounded-[24px] border p-3 pt-[calc(var(--board-column-handle-size)+0.95rem)] transition-[border-color,background-color,box-shadow,transform,opacity] duration-[var(--board-motion-base)] ease-[var(--board-ease-standard)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--board-focus-ring)] ${
                                 isColumnCardDropTarget
-                                  ? "border-[color:var(--board-border-accent)] bg-[rgba(246,246,248,0.92)] shadow-[0_20px_38px_rgba(71,86,109,0.14)]"
+                                  ? "border-[color:var(--board-border-accent)] bg-[color:var(--board-shell-bg)] shadow-[var(--shadow-card)]"
                                   : isColumnSelected
-                                    ? "border-[color:var(--board-border-accent)] bg-[rgba(244,244,247,0.9)] shadow-[0_18px_36px_rgba(69,78,92,0.1)]"
-                                    : "border-[color:var(--board-border)] bg-[rgba(237,237,240,0.8)] hover:border-[color:var(--board-border-strong)]"
+                                    ? "border-[color:var(--board-border-accent)] bg-[color:var(--board-shell-bg)] shadow-[var(--shadow-card)]"
+                                    : "border-[color:var(--board-border)] bg-[color:var(--board-shell-bg)] hover:border-[color:var(--board-border-strong)]"
                               } ${isColumnDragging ? "opacity-60" : "opacity-100"}`}
                             >
                               <button
@@ -782,9 +809,9 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
                                 onKeyDown={(event) => event.stopPropagation()}
                                 onDragStart={(event) => onColumnDragStart(event, column.id)}
                                 onDragEnd={onColumnDragEnd}
-                                className={`absolute left-1/2 top-3 z-10 flex h-[var(--board-column-handle-size)] w-[var(--board-column-handle-size)] -translate-x-1/2 items-center justify-center gap-[var(--board-handle-dot-gap)] rounded-full border border-[color:var(--board-border)] bg-[color:var(--board-handle-surface)] text-[color:var(--board-handle-icon)] shadow-[0_10px_18px_rgba(47,43,40,0.12)] transition-[border-color,background-color,box-shadow,transform,color] duration-[var(--board-motion-fast)] ease-[var(--board-ease-standard)] hover:-translate-x-1/2 hover:-translate-y-px hover:border-[color:var(--board-border-strong)] hover:bg-[color:var(--board-handle-surface-pressed)] hover:shadow-[0_14px_22px_rgba(47,43,40,0.16)] active:-translate-x-1/2 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--board-focus-ring)] ${
+                                className={`absolute left-1/2 top-3 z-10 flex h-[var(--board-column-handle-size)] w-[var(--board-column-handle-size)] -translate-x-1/2 items-center justify-center gap-[var(--board-handle-dot-gap)] rounded-full border border-[color:var(--board-border)] bg-[color:var(--board-handle-surface)] text-[color:var(--board-handle-icon)] shadow-[var(--shadow)] transition-[border-color,background-color,box-shadow,transform,color] duration-[var(--board-motion-fast)] ease-[var(--board-ease-standard)] hover:-translate-x-1/2 hover:-translate-y-px hover:border-[color:var(--board-border-strong)] hover:bg-[color:var(--board-handle-surface-pressed)] hover:shadow-[var(--shadow-lg)] active:-translate-x-1/2 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--board-focus-ring)] ${
                                   isColumnDragging
-                                    ? "border-[color:var(--board-border-accent)] bg-[color:var(--board-handle-surface-pressed)] shadow-[0_14px_24px_rgba(47,43,40,0.18)]"
+                                    ? "border-[color:var(--board-border-accent)] bg-[color:var(--board-handle-surface-pressed)] shadow-[var(--shadow-lg)]"
                                     : ""
                                 }`}
                               >
@@ -793,7 +820,7 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
                                 <span className="h-[var(--board-handle-dot-size)] w-[var(--board-handle-dot-size)] rounded-full bg-current" />
                               </button>
 
-                              <div className="mb-4 rounded-[20px] border border-[color:var(--board-border)] bg-[rgba(255,255,255,0.5)] p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
+                              <div className="mb-4 rounded-[20px] border border-[color:var(--board-border)] bg-[color:var(--board-panel-bg)] p-3.5 shadow-[inset_0_1px_0_var(--board-panel-bg)]">
                                 <div
                                   onDoubleClick={(event) => {
                                     event.stopPropagation();
@@ -802,7 +829,7 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
                                   }}
                                 >
                                   <div className="flex flex-wrap items-center gap-2">
-                                    <span className="inline-flex h-[var(--board-status-pill-height)] items-center rounded-full border border-[color:var(--board-border)] bg-[rgba(255,255,255,0.72)] px-[var(--board-status-pill-px)] text-[9px] font-semibold uppercase leading-none tracking-[var(--board-status-pill-track)] text-[color:var(--board-text-soft)]">
+                                    <span className="inline-flex h-[var(--board-status-pill-height)] items-center rounded-full border border-[color:var(--board-border)] bg-[color:var(--board-panel-bg)] px-[var(--board-status-pill-px)] text-[9px] font-semibold uppercase leading-none tracking-[var(--board-status-pill-track)] text-[color:var(--board-text-soft)]">
                                       Column
                                     </span>
                                     <span className="inline-flex h-[var(--board-status-pill-height)] items-center rounded-full border border-[color:var(--board-border)] bg-[var(--board-warm-soft)] px-[var(--board-status-pill-px)] text-[9px] font-medium uppercase leading-none tracking-[var(--board-status-pill-track)] text-[color:var(--board-warm)]">
@@ -840,7 +867,7 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
                                             setColumnTitleDraft("");
                                           }
                                         }}
-                                        className="h-11 w-full rounded-[14px] border border-[color:var(--board-border-strong)] bg-[rgba(255,255,255,0.9)] px-3 text-[19px] font-semibold tracking-[0.03em] text-[color:var(--board-text-strong)] outline-none transition-[border-color,box-shadow] duration-[var(--board-motion-fast)] ease-[var(--board-ease-standard)] focus-visible:ring-2 focus-visible:ring-[color:var(--board-focus-ring)]"
+                                        className="h-11 w-full rounded-[14px] border border-[color:var(--board-border-strong)] bg-[color:var(--board-panel-bg)] px-3 text-[19px] font-semibold tracking-[0.03em] text-[color:var(--board-text-strong)] outline-none transition-[border-color,box-shadow] duration-[var(--board-motion-fast)] ease-[var(--board-ease-standard)] focus-visible:ring-2 focus-visible:ring-[color:var(--board-focus-ring)]"
                                       />
                                     ) : (
                                       <h2 className="text-[20px] leading-tight tracking-[0.03em] text-[color:var(--board-text-strong)] [font-family:'Cormorant_Garamond','Times_New_Roman',serif]">
@@ -944,7 +971,7 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
                                       className={`rounded-[20px] border border-dashed px-4 py-7 text-center transition-[border-color,background-color,box-shadow] duration-[var(--board-motion-fast)] ease-[var(--board-ease-standard)] ${
                                         isColumnCardDropTarget
                                           ? "border-[color:var(--board-border-accent)] bg-[var(--board-accent-soft)] shadow-[0_0_0_1px_var(--board-accent-glow)]"
-                                          : "border-[color:var(--board-border-strong)] bg-[rgba(255,255,255,0.58)]"
+                                          : "border-[color:var(--board-border-strong)] bg-[color:var(--board-panel-bg)]"
                                       }`}
                                     >
                                       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--board-text-soft)]">
@@ -965,12 +992,12 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
                                     event.stopPropagation();
                                     addCardToColumn(column.id, "note");
                                   }}
-                                  className="mt-4 flex min-h-[var(--board-action-chip-height-roomy)] w-full items-center justify-between rounded-[18px] border border-dashed border-[color:var(--board-border-strong)] bg-[rgba(255,255,255,0.74)] px-3.5 text-left transition-[border-color,background-color,box-shadow,color] duration-[var(--board-motion-fast)] ease-[var(--board-ease-standard)] hover:border-[color:var(--board-border-accent)] hover:bg-white hover:shadow-[0_10px_22px_rgba(76,84,101,0.1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--board-focus-ring)]"
+                                  className="mt-4 flex min-h-[var(--board-action-chip-height-roomy)] w-full items-center justify-between rounded-[18px] border border-dashed border-[color:var(--board-border-strong)] bg-[color:var(--board-panel-bg)] px-3.5 text-left transition-[border-color,background-color,box-shadow,color] duration-[var(--board-motion-fast)] ease-[var(--board-ease-standard)] hover:border-[color:var(--board-border-accent)] hover:bg-[color:var(--board-panel-bg)] hover:shadow-[var(--shadow)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--board-focus-ring)]"
                                 >
                                   <span className="text-[10px] font-semibold uppercase leading-none tracking-[var(--board-action-chip-track)] text-[color:var(--board-accent-strong)]">
                                     + New card
                                   </span>
-                                  <span className="inline-flex h-[var(--board-status-pill-height)] items-center rounded-full border border-[color:var(--board-border)] bg-[rgba(255,255,255,0.7)] px-[var(--board-status-pill-px)] text-[9px] font-medium uppercase leading-none tracking-[var(--board-status-pill-track)] text-[color:var(--board-text-soft)]">
+                                  <span className="inline-flex h-[var(--board-status-pill-height)] items-center rounded-full border border-[color:var(--board-border)] bg-[color:var(--board-panel-bg)] px-[var(--board-status-pill-px)] text-[9px] font-medium uppercase leading-none tracking-[var(--board-status-pill-track)] text-[color:var(--board-text-soft)]">
                                     Starts with note
                                   </span>
                                 </button>
@@ -1007,7 +1034,7 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
         type="button"
         aria-label={viewMode === "board" ? "Switch to canvas view" : "Switch to board view"}
         onClick={() => setViewMode((current) => (current === "board" ? "canvas" : "board"))}
-        className="fixed bottom-5 right-5 z-20 inline-flex h-[78px] w-[78px] flex-col items-center justify-center rounded-full border border-[color:var(--board-border-accent)] bg-[rgba(255,255,255,0.92)] text-[color:var(--board-accent-strong)] shadow-[0_18px_34px_rgba(47,43,40,0.16)] transition-[transform,box-shadow,border-color,background-color,color] duration-[var(--board-motion-base)] ease-[var(--board-ease-standard)] hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_24px_42px_rgba(47,43,40,0.18)] active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--board-focus-ring)]"
+        className="fixed bottom-5 right-5 z-20 inline-flex h-[78px] w-[78px] flex-col items-center justify-center rounded-full border border-[color:var(--board-border-accent)] bg-[color:var(--board-panel-bg)] text-[color:var(--board-accent-strong)] shadow-[var(--shadow-lg)] transition-[transform,box-shadow,border-color,background-color,color] duration-[var(--board-motion-base)] ease-[var(--board-ease-standard)] hover:-translate-y-0.5 hover:bg-[color:var(--board-panel-bg)] hover:shadow-[var(--shadow-lg)] active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--board-focus-ring)]"
       >
         <span
           aria-hidden="true"
