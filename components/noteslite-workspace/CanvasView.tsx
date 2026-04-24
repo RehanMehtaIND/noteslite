@@ -7,9 +7,10 @@ interface CanvasViewProps {
   triggerToast: (msg: string) => void;
   openCardEditor: (colName: string, cardTitle: string) => void;
   columns: any[];
+  onDeleteItem: (id: string) => void;
 }
 
-export default function CanvasView({ items, setItems, connections, triggerToast, openCardEditor, columns }: CanvasViewProps) {
+export default function CanvasView({ items, setItems, connections, triggerToast, openCardEditor, columns, onDeleteItem }: CanvasViewProps) {
   const frameRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const [cam, setCam] = useState({ x: 0, y: 0 });
@@ -129,9 +130,8 @@ export default function CanvasView({ items, setItems, connections, triggerToast,
         }}>⧉</button>
         <div className="noteslite-cv-ibar-sep" />
         <button className="noteslite-cv-ibar-btn del" title="Delete" onClick={() => {
-          setItems(prev => prev.filter(i => i.id !== item.id));
+          onDeleteItem(item.id);
           if (selectedId === item.id) setSelectedId(null);
-          triggerToast('Item deleted');
         }}>×</button>
       </div>
     );

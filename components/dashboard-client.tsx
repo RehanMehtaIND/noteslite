@@ -138,9 +138,9 @@ function getLocalTimezone() {
 }
 
 function getProfileInitials(userName: string) {
-  const parts = userName
+  const parts = (userName || "")
     .split(/\s+/)
-    .map((part) => part.trim())
+    .map((part) => (part || "").trim())
     .filter(Boolean);
 
   if (parts.length >= 2) {
@@ -380,9 +380,9 @@ export default function DashboardClient({
   );
 
   const savePasswordChange = useCallback(() => {
-    const current = passwordForm.currentPassword.trim();
-    const next = passwordForm.newPassword.trim();
-    const confirm = passwordForm.confirmPassword.trim();
+    const current = (passwordForm.currentPassword || "").trim();
+    const next = (passwordForm.newPassword || "").trim();
+    const confirm = (passwordForm.confirmPassword || "").trim();
 
     setPasswordError(null);
     setPasswordSuccess(null);
@@ -676,12 +676,12 @@ export default function DashboardClient({
     }
 
     if (themeEditorMode === "image") {
-      if (!isValidImageUrl(imageUrl.trim())) {
+      if (!isValidImageUrl((imageUrl || "").trim())) {
         setError("Use a valid http or https image URL.");
         return;
       }
 
-      nextTheme = `image:${imageUrl.trim()}`;
+      nextTheme = `image:${(imageUrl || "").trim()}`;
     }
 
     setError(null);

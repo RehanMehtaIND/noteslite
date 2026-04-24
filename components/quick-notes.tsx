@@ -31,12 +31,12 @@ const DEFAULT_COLORS = [
 ];
 
 function wordCount(text: string) {
-  return text.trim().split(/\s+/).filter(Boolean).length;
+  return (text || "").trim().split(/\s+/).filter(Boolean).length;
 }
 
 function truncateWords(text: string, max: number) {
-  const words = text.trim().split(/\s+/).filter(Boolean);
-  if (words.length <= max) return text;
+  const words = (text || "").trim().split(/\s+/).filter(Boolean);
+  if (words.length <= max) return text || "";
   return words.slice(0, max).join(" ");
 }
 

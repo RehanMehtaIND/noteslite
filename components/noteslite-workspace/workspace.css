@@ -231,6 +231,36 @@
   flex-shrink: 0;
 }
 
+.noteslite-col-delete {
+  margin-left: 4px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  color: var(--text2);
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  transition: all 0.2s;
+  opacity: 0;
+  transform: scale(0.8);
+}
+
+.noteslite-col-header:hover .noteslite-col-delete {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.noteslite-col-delete:hover {
+  background: #A04040;
+  border-color: #A04040;
+  color: #fff;
+}
+
 .noteslite-col-desc-wrap { margin-bottom: 10px; position: relative; }
 .noteslite-col-desc {
   width: 100%;

@@ -62,7 +62,7 @@ const TIMEZONE_OPTIONS = [
 ] as const;
 
 function isValidImageUrl(value: string) {
-  if (!value.trim()) return false;
+  if (!value || !value.trim()) return false;
   if (value.startsWith("data:image/")) return true;
   try {
     const url = new URL(value);
@@ -82,6 +82,7 @@ function getFocusableElements(container: HTMLElement | null) {
 }
 
 function maskEmail(email: string) {
+  if (!email) return "No email available";
   const [local, domain] = email.split("@");
   if (!local || !domain) return email || "No email available";
   if (local.length <= 2) return `${local[0] ?? ""}•@${domain}`;
@@ -178,7 +179,7 @@ export default function ProfileModal({
   }, [isVisible, onClose]);
 
   const applyImage = () => {
-    if (!imgUrlInput.trim()) return;
+    if (!(imgUrlInput || "").trim()) return;
     onUpdateProfile({ avatarUrl: imgUrlInput, avatarMode: "url" });
   };
 

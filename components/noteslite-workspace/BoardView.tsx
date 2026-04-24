@@ -10,9 +10,10 @@ interface BoardViewProps {
   handleMoveCard: (cardTitle: string, sourceColId: string, targetColId: string, targetIndex?: number) => void;
   handleAddCard: (colId: string) => void;
   handleDeleteCard: (cardTitle: string) => void;
+  handleDeleteColumn: (colId: string) => void;
 }
 
-export default function BoardView({ columns, cardsData, openCardEditor, openColModal, triggerToast, handleMoveCard, handleAddCard, handleDeleteCard }: BoardViewProps) {
+export default function BoardView({ columns, cardsData, openCardEditor, openColModal, triggerToast, handleMoveCard, handleAddCard, handleDeleteCard, handleDeleteColumn }: BoardViewProps) {
   
   const handleTextareaInput = (e: React.FormEvent<HTMLTextAreaElement>) => {
     e.currentTarget.style.height = 'auto';
@@ -34,6 +35,16 @@ export default function BoardView({ columns, cardsData, openCardEditor, openColM
                 readOnly
               />
               <div className="noteslite-col-count">{col.cards ? col.cards.length : 0}</div>
+              <button 
+                className="noteslite-col-delete"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeleteColumn(col.id);
+                }}
+                title="Delete column"
+              >
+                ×
+              </button>
             </div>
             <div className="noteslite-col-desc-wrap">
               <textarea 
