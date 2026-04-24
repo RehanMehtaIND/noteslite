@@ -113,6 +113,15 @@ export default function NotesliteWorkspace({ initialData }: { initialData?: any 
     triggerToast(`Card "${cardTitle}" deleted`);
   };
 
+  const handleDeleteColumn = (colId: string) => {
+    const col = columns.find(c => c.id === colId);
+    if (!col) return;
+    
+    setColumns(prev => prev.filter(c => c.id !== colId));
+    setCanvasItems(prev => prev.filter(i => i.id !== colId));
+    triggerToast(`Column "${col.title}" deleted`);
+  };
+
   const handleMoveCard = (cardTitle: string, sourceColId: string, targetColId: string, targetIndex?: number) => {
     setColumns(prev => {
       const sourceColIndex = prev.findIndex(c => c.id === sourceColId);
@@ -176,6 +185,7 @@ export default function NotesliteWorkspace({ initialData }: { initialData?: any 
             handleMoveCard={handleMoveCard}
             handleAddCard={handleAddCard}
             handleDeleteCard={handleDeleteCard}
+            handleDeleteColumn={handleDeleteColumn}
           />
         </div>
 
@@ -188,6 +198,15 @@ export default function NotesliteWorkspace({ initialData }: { initialData?: any 
               triggerToast={triggerToast}
               openCardEditor={openCardEditor}
               columns={columns}
+              onDeleteItem={(id) => {
+                const item = canvasItems.find(i => i.id === id);
+                if (item?.type === 'column') {
+                  handleDeleteColumn(id);
+                } else {
+                  setCanvasItems(prev => prev.filter(i => i.id !== id));
+                  triggerToast('Item removed');
+                }
+              }}
             />
           )}
         </div>

@@ -118,9 +118,9 @@ const WORKSPACE_FALLBACK_IMAGES = [
 ];
 
 function initials(name: string) {
-  const parts = name
+  const parts = (name || "")
     .split(/\s+/)
-    .map((part) => part.trim())
+    .map((part) => (part || "").trim())
     .filter(Boolean)
     .slice(0, 2);
 
