@@ -9,5 +9,5 @@ export default function WorkspaceBoardPageShell({
   workspaceId: string;
   initialData?: any;
 }) {
-  return <NotesliteWorkspace initialData={initialData} />;
+  return <NotesliteWorkspace initialData={initialData} workspaceId={workspaceId} />;
 }

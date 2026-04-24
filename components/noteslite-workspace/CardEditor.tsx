@@ -108,7 +108,7 @@ export default function CardEditor({ colName, cardTitle, cardData, setCardData, 
             <div className="noteslite-cover-emoji">{data.icon}</div>
             <button className="noteslite-cover-change-btn" onClick={() => triggerToast('Cover picker coming soon')}>🎨 Change cover</button>
           </div>
-          <input className="noteslite-card-title-input" defaultValue={cardTitle} placeholder="Untitled" />
+          <input className="noteslite-card-title-input" defaultValue={data.title || data.blocks?.[0]?.v || "Untitled"} placeholder="Untitled" onChange={e => setCardData({ ...data, title: e.target.value })} />
           <div className="noteslite-card-meta">
             {data.tags.map((t: any, i: number) => (
               <div key={i} className="noteslite-card-tag-chip" style={{ background: `${t.c}20`, color: t.c }}>{t.l}</div>

@@ -14,7 +14,7 @@ const createCardSchema = z.object({
   title: z.string().trim().min(1).max(160),
   columnId: z.string().uuid().optional().nullable(),
   coverImage: z.string().trim().url().max(2048).optional().nullable(),
-  content: z.record(z.string(), z.unknown()).optional(),
+  content: z.any().optional(),
 });
 
 export async function POST(req: Request, context: RouteContext) {
