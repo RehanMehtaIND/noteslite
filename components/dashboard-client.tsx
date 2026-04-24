@@ -291,6 +291,7 @@ export default function DashboardClient({
   const [passwordForm, setPasswordForm] = useState<PasswordForm>(DEFAULT_PASSWORD_FORM);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+  const [isPasswordLoading, setIsPasswordLoading] = useState(false);
   const profileTriggerRef = useRef<HTMLButtonElement | null>(null);
   const profileCloseTimerRef = useRef<number | null>(null);
   const hasHydratedProfileRef = useRef(false);
