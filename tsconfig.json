@@ -24,10 +24,7 @@
     ],
     "baseUrl": ".",
     "paths": {
-      "@/lib/*": ["src/backend/lib/*"],
-      "@/components/*": ["src/frontend/components/*"],
-      "@/hooks/*": ["src/frontend/hooks/*"],
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     }
   },
   "include": [
