@@ -202,6 +202,8 @@ export default function DashboardPolished() {
 
   const [toast, setToast] = useState("");
   const [pendingWorkspaceIds, setPendingWorkspaceIds] = useState<Set<string>>(new Set());
+  const [wsMenuOpenId, setWsMenuOpenId] = useState<string | null>(null);
+  const [editWsId, setEditWsId] = useState<string | null>(null);
 
   // Quick Notes state (synced with database)
   const [quickNotes, setQuickNotes] = useState<QuickNote[]>([]);
@@ -293,8 +295,8 @@ export default function DashboardPolished() {
     let defaultTimezone = "UTC";
     try {
       defaultTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-    } catch {}
-    
+    } catch { }
+
     return {
       avatarMode: "placeholder",
       avatarUrl: "",
@@ -343,7 +345,7 @@ export default function DashboardPolished() {
   // Fetch initial profile settings from database
   useEffect(() => {
     if (status !== "authenticated") return;
-    
+
     let isMounted = true;
 
     async function loadProfile() {
@@ -353,9 +355,9 @@ export default function DashboardPolished() {
           console.warn("[Profile] Failed to load from API. Status:", res.status);
           return;
         }
-        
+
         const data = await res.json();
-        
+
         if (isMounted) {
           setProfileSettings((prev) => ({
             ...prev,
@@ -366,7 +368,7 @@ export default function DashboardPolished() {
             ...(data.theme !== undefined && { theme: data.theme }),
             ...(data.dashboardBackground !== undefined && { dashboardBackground: data.dashboardBackground }),
           }));
-          
+
           // Sync body class immediately so all CSS inherits the theme
           if (data.theme) {
             setTheme(data.theme as Theme);
@@ -421,9 +423,9 @@ export default function DashboardPolished() {
       }
     } else {
       setProfileSettings((prev) => ({ ...prev, ...updates }));
-      
+
       const { avatarMode, avatarUrl, displayName, showEmail, theme, dashboardBackground } = updates;
-      
+
       // Sync body theme class immediately
       if (theme) {
         setTheme(theme as Theme);
@@ -732,6 +734,8 @@ export default function DashboardPolished() {
       if (!profileWrapRef.current.contains(event.target as Node)) {
         setProfileOpen(false);
       }
+      // Also close workspace menu if clicking elsewhere
+      setWsMenuOpenId(null);
     }
 
     document.addEventListener("click", onDocumentClick);
@@ -923,6 +927,46 @@ export default function DashboardPolished() {
     }
   }
 
+  async function handleUpdateWorkspace() {
+    if (!editWsId) return;
+    const name = newWorkspaceName.trim();
+    if (!name) { setToast("Workspace name is required"); return; }
+
+    setIsCreating(true);
+    try {
+      const res = await fetch(`/api/workspaces/${editWsId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          theme: `color:${newWorkspaceColor}`,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to update workspace");
+
+      const data = await res.json();
+      setWorkspaces((prev) => prev.map(ws => ws.id === editWsId ? { ...ws, name: data.workspace.name, theme: data.workspace.theme } : ws));
+      setToast("Workspace updated");
+      setCreateOpen(false);
+      setEditWsId(null);
+    } catch (err) {
+      console.error(err);
+      setToast("Failed to update workspace");
+    } finally {
+      setIsCreating(false);
+    }
+  }
+
+  function openEditWorkspace(ws: WorkspaceItem) {
+    setEditWsId(ws.id);
+    setNewWorkspaceName(ws.name);
+    const accent = getThemeAccent(ws.theme);
+    setNewWorkspaceColor(accent);
+    setCreateOpen(true);
+    setWsMenuOpenId(null);
+  }
+
   function handleOpenWorkspace(workspace: WorkspaceItem) {
     if (pendingWorkspaceIds.has(workspace.id)) {
       setToast("Workspace is still being created...");
@@ -992,9 +1036,9 @@ export default function DashboardPolished() {
     <>
       <div className="app-root transition-colors duration-500">
         {profileSettings.dashboardBackground && (
-          <div 
+          <div
             className="absolute inset-0 z-0 opacity-40 transition-opacity duration-700 pointer-events-none"
-            style={{ 
+            style={{
               backgroundImage: `url(${profileSettings.dashboardBackground})`,
               backgroundSize: 'cover',
               backgroundPosition: 'center',
@@ -1247,9 +1291,9 @@ export default function DashboardPolished() {
               </button>
 
               <div className="header-actions" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                <button 
-                  className="notif-btn" 
-                  type="button" 
+                <button
+                  className="notif-btn"
+                  type="button"
                   onClick={() => { setToast("No new notifications"); setNotifVisible(false); }}
                   title="Notifications"
                 >
@@ -1353,11 +1397,22 @@ export default function DashboardPolished() {
                             className="ws-delete-btn"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleDeleteWorkspace(workspace.id);
+                              setWsMenuOpenId(wsMenuOpenId === workspace.id ? null : workspace.id);
                             }}
                           >
                             -
                           </button>
+
+                          {wsMenuOpenId === workspace.id && (
+                            <div className="ws-card-menu" onClick={(e) => e.stopPropagation()}>
+                              <button className="ws-card-menu-item" onClick={() => openEditWorkspace(workspace)}>
+                                ✏️ Edit
+                              </button>
+                              <button className="ws-card-menu-item danger" onClick={() => { handleDeleteWorkspace(workspace.id); setWsMenuOpenId(null); }}>
+                                🗑️ Delete
+                              </button>
+                            </div>
+                          )}
                           <div className="ws-label-wrap">
                             <div className="ws-label">{workspace.name}</div>
                           </div>
@@ -1571,23 +1626,26 @@ export default function DashboardPolished() {
           </div>
         </div>
 
-        <div className={`overlay ${createOpen ? "show" : ""}`} onClick={() => setCreateOpen(false)}>
+        <div className={`overlay ${createOpen ? "show" : ""}`} onClick={() => { setCreateOpen(false); setEditWsId(null); }}>
           <div className="modal" onClick={(event) => event.stopPropagation()}>
-            <div className="modal-title">New Workspace</div>
-            <div className="modal-sub">Name your thinking space and pick an accent colour.</div>
+            <div className="modal-title">{editWsId ? "Edit Workspace" : "New Workspace"}</div>
+            <div className="modal-sub">
+              {editWsId ? "Update your workspace name and theme." : "Create a beautiful workspace for your notes and ideas."}
+            </div>
+
             <div className="modal-label">Workspace Name</div>
             <input
               ref={createNameInputRef}
               className="modal-input"
-              type="text"
-              placeholder="e.g. Research, Sprint 4, Novel..."
+              placeholder="e.g. Project Apollo"
               value={newWorkspaceName}
-              onChange={(event) => setNewWorkspaceName(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") handleCreateWorkspace();
-                if (event.key === "Escape") setCreateOpen(false);
+              onChange={(e) => setNewWorkspaceName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") editWsId ? handleUpdateWorkspace() : handleCreateWorkspace();
+                if (e.key === "Escape") { setCreateOpen(false); setEditWsId(null); }
               }}
             />
+
             <div className="modal-label">Accent Colour</div>
             <div className="color-row">
               {COLOR_SWATCHES.map((color) => (
@@ -1621,10 +1679,22 @@ export default function DashboardPolished() {
                 style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0 }}
               />
             </div>
+
             <div className="modal-actions">
-              <button className="btn-cancel" type="button" onClick={() => setCreateOpen(false)}>Cancel</button>
-              <button className="btn-confirm" type="button" disabled={isCreating} onClick={handleCreateWorkspace}>
-                {isCreating ? "Creating..." : "Create"}
+              <button
+                className="btn-cancel"
+                type="button"
+                onClick={() => { setCreateOpen(false); setEditWsId(null); }}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-confirm"
+                type="button"
+                disabled={!newWorkspaceName.trim() || isCreating}
+                onClick={editWsId ? handleUpdateWorkspace : handleCreateWorkspace}
+              >
+                {isCreating ? "Saving..." : (editWsId ? "Save" : "Create")}
               </button>
             </div>
           </div>
@@ -2500,6 +2570,40 @@ export default function DashboardPolished() {
           font-weight: 700;
           font-family: "Syne", sans-serif;
         }
+
+        .ws-card-menu {
+          position: absolute;
+          top: 40px;
+          right: 10px;
+          width: 120px;
+          background: var(--surface2);
+          border: 1px solid var(--border2);
+          border-radius: 12px;
+          box-shadow: var(--shadow-lg);
+          z-index: 20;
+          overflow: hidden;
+          animation: fadeUp 0.15s ease-out;
+        }
+
+        .ws-card-menu-item {
+          width: 100%;
+          padding: 10px 14px;
+          border: none;
+          background: none;
+          text-align: left;
+          font-size: 11px;
+          font-weight: 600;
+          color: var(--text2);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          transition: background 0.1s;
+        }
+
+        .ws-card-menu-item:hover { background: var(--bg2); color: var(--text); }
+        .ws-card-menu-item.danger { color: var(--rose); border-top: 1px solid var(--border); }
+        .ws-card-menu-item.danger:hover { background: var(--rose); color: white; }
 
         .wt.ta { background: var(--accent-l); color: var(--green); border: 1px solid var(--green); }
 

@@ -30,14 +30,8 @@ const DEFAULT_COLORS = [
   { id: "pink", hex: "#A06878", label: "Pink" },
 ];
 
-function wordCount(text: string) {
-  return (text || "").trim().split(/\s+/).filter(Boolean).length;
-}
-
-function truncateWords(text: string, max: number) {
-  const words = (text || "").trim().split(/\s+/).filter(Boolean);
-  if (words.length <= max) return text || "";
-  return words.slice(0, max).join(" ");
+function charCount(text: string) {
+  return (text || "").length;
 }
 
 export default function QuickNotesView({ notes, onCreateNote, onUpdateNote, onDeleteNote, onToast }: QuickNotesViewProps) {
@@ -100,8 +94,8 @@ export default function QuickNotesView({ notes, onCreateNote, onUpdateNote, onDe
     const t = formTitle.trim();
     if (!t) { onToast("Title is required"); return; }
     onCreateNote({
-      title: truncateWords(t, 30),
-      description: truncateWords(formDesc, 200),
+      title: t.slice(0, 50),
+      description: formDesc.slice(0, 500),
       color: formColor,
       pinned: false,
     });
@@ -117,8 +111,8 @@ export default function QuickNotesView({ notes, onCreateNote, onUpdateNote, onDe
     const t = formTitle.trim();
     if (!t) { onToast("Title is required"); return; }
     onUpdateNote(editId, {
-      title: truncateWords(t, 30),
-      description: truncateWords(formDesc, 200),
+      title: t.slice(0, 50),
+      description: formDesc.slice(0, 500),
       color: formColor,
     });
     setEditId(null);
@@ -343,11 +337,11 @@ export default function QuickNotesView({ notes, onCreateNote, onUpdateNote, onDe
             <div className="qnv-form-title">{editId ? "Edit Note" : "New Quick Note"}</div>
             <div className="qnv-form-sub">{editId ? "Update your note details." : "Capture a thought quickly."}</div>
             <div className="qnv-form-label">Title</div>
-            <input ref={titleRef} className="qnv-form-input" type="text" placeholder="Note title..." value={formTitle} onChange={(e) => setFormTitle(truncateWords(e.target.value, 30))} onKeyDown={(e) => { if (e.key === "Enter") editId ? handleEdit() : handleCreate(); if (e.key === "Escape") { setCreateOpen(false); setEditId(null); } }} />
-            <div className="qnv-form-hint">{wordCount(formTitle)}/30 words</div>
+            <input ref={titleRef} className="qnv-form-input" type="text" placeholder="Note title..." value={formTitle} maxLength={50} onChange={(e) => setFormTitle(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") editId ? handleEdit() : handleCreate(); if (e.key === "Escape") { setCreateOpen(false); setEditId(null); } }} />
+            <div className="qnv-form-hint">{charCount(formTitle)}/50 characters</div>
             <div className="qnv-form-label">Description</div>
-            <textarea className="qnv-form-textarea" placeholder="Write something..." value={formDesc} onChange={(e) => setFormDesc(truncateWords(e.target.value, 200))} />
-            <div className="qnv-form-hint">{wordCount(formDesc)}/200 words</div>
+            <textarea className="qnv-form-textarea" placeholder="Write something..." value={formDesc} maxLength={500} onChange={(e) => setFormDesc(e.target.value)} />
+            <div className="qnv-form-hint">{charCount(formDesc)}/500 characters</div>
             <div className="qnv-form-label">Color</div>
             <div className="qnv-form-colors">
               {allColors.map((c) => (
