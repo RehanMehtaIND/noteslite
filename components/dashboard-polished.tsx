@@ -344,27 +344,44 @@ export default function DashboardPolished() {
   useEffect(() => {
     if (status !== "authenticated") return;
     
-    fetch("/api/profile")
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to load profile");
-        return res.json();
-      })
-      .then((data) => {
-        setProfileSettings((prev) => ({
-          ...prev,
-          ...(data.avatarMode && { avatarMode: data.avatarMode }),
-          ...(data.avatarUrl !== undefined && { avatarUrl: data.avatarUrl }),
-          ...(data.displayName !== undefined && { displayName: data.displayName }),
-          ...(data.showEmail !== undefined && { showEmail: data.showEmail }),
-          ...(data.theme !== undefined && { theme: data.theme }),
-          ...(data.dashboardBackground !== undefined && { dashboardBackground: data.dashboardBackground }),
-        }));
-        // Sync body class immediately so all CSS inherits the theme
-        if (data.theme) {
-          setTheme(data.theme as Theme);
+    let isMounted = true;
+
+    async function loadProfile() {
+      try {
+        const res = await fetch("/api/profile");
+        if (!res.ok) {
+          console.warn("[Profile] Failed to load from API. Status:", res.status);
+          return;
         }
-      })
-      .catch((err) => console.error("Error loading profile settings:", err));
+        
+        const data = await res.json();
+        
+        if (isMounted) {
+          setProfileSettings((prev) => ({
+            ...prev,
+            ...(data.avatarMode && { avatarMode: data.avatarMode }),
+            ...(data.avatarUrl !== undefined && { avatarUrl: data.avatarUrl }),
+            ...(data.displayName !== undefined && { displayName: data.displayName }),
+            ...(data.showEmail !== undefined && { showEmail: data.showEmail }),
+            ...(data.theme !== undefined && { theme: data.theme }),
+            ...(data.dashboardBackground !== undefined && { dashboardBackground: data.dashboardBackground }),
+          }));
+          
+          // Sync body class immediately so all CSS inherits the theme
+          if (data.theme) {
+            setTheme(data.theme as Theme);
+          }
+        }
+      } catch (err) {
+        console.error("[Profile] Error loading profile settings:", err);
+      }
+    }
+
+    loadProfile();
+
+    return () => {
+      isMounted = false;
+    };
   }, [status]);
 
   async function handleUpdateProfile(updates: Partial<ProfileSettings>) {
@@ -545,7 +562,6 @@ export default function DashboardPolished() {
   }
 
   const profileWrapRef = useRef<HTMLDivElement | null>(null);
-  const hasRequestedEmailRef = useRef<string | null>(null);
   const devicePanelRef = useRef<HTMLDivElement | null>(null);
   const createNameInputRef = useRef<HTMLInputElement | null>(null);
   const templateNameInputRef = useRef<HTMLInputElement | null>(null);
@@ -604,12 +620,6 @@ export default function DashboardPolished() {
       setIsLoading(false);
       return;
     }
-
-    if (hasRequestedEmailRef.current === session.user.email) {
-      return;
-    }
-
-    hasRequestedEmailRef.current = session.user.email;
 
     let cancelled = false;
 

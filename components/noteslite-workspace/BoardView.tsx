@@ -119,7 +119,7 @@ export default function BoardView({ columns, cardsData, openCardEditor, openColM
                     ×
                   </button>
                   <div className="noteslite-bcard-title" style={col.title === 'Done' ? { textDecoration: 'line-through', color: 'var(--text3)', paddingRight: '20px' } : { paddingRight: '20px' }}>
-                    {card}
+                    {cardMeta.title || cardMeta.blocks?.[0]?.v || "Untitled"}
                   </div>
                   <div className="noteslite-bcard-preview">{previewBlock}</div>
                   <div className="noteslite-bcard-footer">

@@ -13,19 +13,23 @@ export async function GET() {
   try {
     const dbUser = await prisma.user.findUnique({
       where: { id: user.id },
-      select: {
-        avatarMode: true,
-        avatarUrl: true,
-        displayName: true,
-        showEmail: true,
-        theme: true,
-        dashboardBackground: true,
-      },
     });
 
     if (!dbUser) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
+
+    // Extract what we need safely
+    const payload = {
+      avatarMode: (dbUser as any).avatarMode ?? "initials",
+      avatarUrl: (dbUser as any).avatarUrl,
+      displayName: (dbUser as any).displayName,
+      showEmail: (dbUser as any).showEmail ?? false,
+      theme: (dbUser as any).theme ?? "standard",
+      dashboardBackground: (dbUser as any).dashboardBackground,
+    };
+
+    return NextResponse.json(payload);
 
     return NextResponse.json(dbUser);
   } catch (error) {
@@ -63,17 +67,19 @@ export async function PATCH(req: Request) {
         ...(body.theme !== undefined && { theme: body.theme }),
         ...(body.dashboardBackground !== undefined && { dashboardBackground: body.dashboardBackground }),
       },
-      select: {
-        avatarMode: true,
-        avatarUrl: true,
-        displayName: true,
-        showEmail: true,
-        theme: true,
-        dashboardBackground: true,
-      },
     });
 
-    return NextResponse.json(updatedUser);
+    // Safely return updated fields
+    const payload = {
+      avatarMode: (updatedUser as any).avatarMode ?? "initials",
+      avatarUrl: (updatedUser as any).avatarUrl,
+      displayName: (updatedUser as any).displayName,
+      showEmail: (updatedUser as any).showEmail ?? false,
+      theme: (updatedUser as any).theme ?? "standard",
+      dashboardBackground: (updatedUser as any).dashboardBackground,
+    };
+
+    return NextResponse.json(payload);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.errors[0].message }, { status: 400 });

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useWorkspaceSync } from '@/hooks/use-workspace-sync';
 import './workspace.css';
 import { CV_SEED, CV_CONNECTIONS, INITIAL_CARD_DATA } from './data';
 import TopBar from './TopBar';
@@ -12,7 +13,7 @@ import ColumnModal from './ColumnModal';
 export type ViewMode = 'board' | 'canvas';
 export type ScreenMode = 'ws' | 'editor';
 
-export default function NotesliteWorkspace({ initialData }: { initialData?: any }) {
+export default function NotesliteWorkspace({ initialData, workspaceId }: { initialData?: any; workspaceId?: string }) {
   const [activeView, setActiveView] = useState<ViewMode>('board');
   const [activeScreen, setActiveScreen] = useState<ScreenMode>('ws');
   
@@ -28,6 +29,100 @@ export default function NotesliteWorkspace({ initialData }: { initialData?: any 
   const [cardsData, setCardsData] = useState<Record<string, any>>(() => {
     if (initialData?.cardsData) return initialData.cardsData;
     return INITIAL_CARD_DATA;
+  });
+
+  const clientId = useMemo(() => {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+    return `client-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  }, []);
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    let cancelled = false;
+    async function loadWorkspace() {
+      try {
+        const res = await fetch(`/api/workspaces/${workspaceId}`);
+        if (!res.ok) return;
+
+        const { workspace } = await res.json();
+        if (cancelled || !workspace) return;
+
+        const cardsByColumn = new Map<string, any[]>();
+        const newCardsData: Record<string, any> = {};
+
+        for (const card of workspace.cards || []) {
+          const colId = card.columnId || "__unassigned__";
+          if (!cardsByColumn.has(colId)) cardsByColumn.set(colId, []);
+          cardsByColumn.get(colId)!.push(card.id);
+          
+          newCardsData[card.id] = {
+            id: card.id,
+            icon: '📄', coverA: '#7A9ABB', coverB: '#9ABACB', tags: [],
+            blocks: Array.isArray(card.content) ? card.content : [{ t: 'h1', v: card.title || 'New Card' }, { t: 'p', v: '' }],
+            title: card.title
+          };
+        }
+
+        const newColumns = (workspace.columns || []).map((col: any) => ({
+          id: col.id,
+          type: 'column',
+          title: col.name || "Untitled",
+          cards: cardsByColumn.get(col.id) || [],
+          x: Math.random() * 500, y: Math.random() * 500, w: 232, z: 1, color: 'brand'
+        }));
+
+        setColumns(newColumns);
+        setCardsData(newCardsData);
+      } catch (err) {
+        console.error("Failed to load workspace:", err);
+      }
+    }
+    loadWorkspace();
+    return () => { cancelled = true; };
+  }, [workspaceId]);
+
+  useWorkspaceSync(workspaceId || "", clientId, {
+    onCardCreated: (card: any) => {
+      setCardsData(prev => {
+        if (prev[card.id]) return prev;
+        return {
+          ...prev,
+          [card.id]: {
+            id: card.id,
+            icon: '📄', coverA: '#7A9ABB', coverB: '#9ABACB', tags: [],
+            blocks: Array.isArray(card.content) ? card.content : [{ t: 'h1', v: card.title || 'New Card' }, { t: 'p', v: '' }],
+            title: card.title
+          }
+        };
+      });
+      setColumns(prev => prev.map(col => {
+        if (col.id === card.columnId && !col.cards?.includes(card.id)) {
+          return { ...col, cards: [...(col.cards || []), card.id] };
+        }
+        return col;
+      }));
+    },
+    onCardUpdated: (card: any) => {
+      setCardsData(prev => ({
+        ...prev,
+        [card.id]: {
+          ...prev[card.id],
+          blocks: Array.isArray(card.content) ? card.content : prev[card.id]?.blocks,
+          title: card.title || prev[card.id]?.title
+        }
+      }));
+    },
+    onColumnCreated: (column: any) => {
+      setColumns(prev => {
+        if (prev.some(c => c.id === column.id)) return prev;
+        return [...prev, {
+          id: column.id, type: 'column', title: column.name, cards: [],
+          x: 50, y: 50, w: 232, z: 1, color: 'brand'
+        }];
+      });
+    }
   });
 
   const [toastMessage, setToastMessage] = useState('');
@@ -59,43 +154,110 @@ export default function NotesliteWorkspace({ initialData }: { initialData?: any 
     setEditorData(null);
   };
 
-  const handleAddColumn = (name: string, desc: string, color: string) => {
-    const newCol = {
-      id: 'col-' + Math.random().toString(36).substr(2, 6),
-      type: 'column',
-      x: 50, y: 50, w: 232,
-      color, title: name, desc, cards: [], z: 99
-    };
-    setColumns(prev => [...prev, newCol]);
-    setCanvasItems(prev => [...prev, newCol]);
-    setIsColModalOpen(false);
-    triggerToast(`✓ Column "${name}" created`);
+  const handleAddColumn = async (name: string, desc: string, color: string) => {
+    if (!workspaceId) {
+      const newCol = {
+        id: 'col-' + Math.random().toString(36).substr(2, 6),
+        type: 'column',
+        x: 50, y: 50, w: 232,
+        color, title: name, desc, cards: [], z: 99
+      };
+      setColumns(prev => [...prev, newCol]);
+      setCanvasItems(prev => [...prev, newCol]);
+      setIsColModalOpen(false);
+      triggerToast(`✓ Column "${name}" created`);
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/columns`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-client-id": clientId },
+        body: JSON.stringify({ name }),
+      });
+
+      if (!response.ok) throw new Error("Failed to create column");
+      const { column } = await response.json();
+      
+      const newCol = {
+        id: column.id, type: 'column', x: 50, y: 50, w: 232, color, title: column.name, desc, cards: [], z: 99
+      };
+      setColumns(prev => [...prev, newCol]);
+      setCanvasItems(prev => [...prev, newCol]);
+      setIsColModalOpen(false);
+      triggerToast(`✓ Column "${name}" created`);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const handleAddCard = (colId?: string) => {
+  const handleAddCard = async (colId?: string) => {
+    const targetColId = colId || columns[0]?.id;
+
+    if (!targetColId) {
+      triggerToast("Please add a column first to add cards.");
+      return;
+    }
+
     const title = `New Card ${Math.floor(Math.random() * 1000)}`;
-    setCardsData(prev => ({
-      ...prev,
-      [title]: {
-        icon: '📄', coverA: '#7A9ABB', coverB: '#9ABACB', tags: [],
-        blocks: [{ t: 'h1', v: title }, { t: 'p', v: '' }]
-      }
-    }));
-    
-    // Add to specific column or first column
-    setColumns(prev => {
-      const newColumns = [...prev];
-      const targetIdx = colId ? newColumns.findIndex(c => c.id === colId) : 0;
-      if (targetIdx !== -1) {
-        newColumns[targetIdx] = { ...newColumns[targetIdx], cards: [...(newColumns[targetIdx].cards || []), title] };
-      }
-      return newColumns;
-    });
-    
-    // Open editor
-    const colName = colId ? columns.find(c => c.id === colId)?.title : columns[0]?.title;
-    if (colName) {
-      openCardEditor(colName, title);
+
+    if (!workspaceId) {
+      const newId = title;
+      setCardsData(prev => ({
+        ...prev,
+        [newId]: {
+          icon: '📄', coverA: '#7A9ABB', coverB: '#9ABACB', tags: [],
+          blocks: [{ t: 'h1', v: title }, { t: 'p', v: '' }]
+        }
+      }));
+      setColumns(prev => {
+        const newColumns = [...prev];
+        const targetIdx = targetColId ? newColumns.findIndex(c => c.id === targetColId) : 0;
+        if (targetIdx !== -1) {
+          newColumns[targetIdx] = { ...newColumns[targetIdx], cards: [...(newColumns[targetIdx].cards || []), newId] };
+        }
+        return newColumns;
+      });
+      const colName = targetColId ? columns.find(c => c.id === targetColId)?.title : columns[0]?.title;
+      if (colName) openCardEditor(colName, newId);
+      return;
+    }
+
+    try {
+      const initialBlocks = [{ t: 'h1', v: title }, { t: 'p', v: '' }];
+      const response = await fetch(`/api/workspaces/${workspaceId}/cards`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-client-id": clientId },
+        body: JSON.stringify({ title, columnId: targetColId, content: initialBlocks }),
+      });
+
+      if (!response.ok) throw new Error("Failed to create card");
+      const { card } = await response.json();
+
+      const newId = card.id;
+
+      setCardsData(prev => ({
+        ...prev,
+        [newId]: {
+          id: newId,
+          icon: '📄', coverA: '#7A9ABB', coverB: '#9ABACB', tags: [],
+          blocks: initialBlocks,
+          title: title
+        }
+      }));
+      setColumns(prev => {
+        const newColumns = [...prev];
+        const targetIdx = targetColId ? newColumns.findIndex(c => c.id === targetColId) : 0;
+        if (targetIdx !== -1) {
+          newColumns[targetIdx] = { ...newColumns[targetIdx], cards: [...(newColumns[targetIdx].cards || []), newId] };
+        }
+        return newColumns;
+      });
+
+      const colName = targetColId ? columns.find(c => c.id === targetColId)?.title : columns[0]?.title;
+      if (colName) openCardEditor(colName, newId);
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -219,7 +381,21 @@ export default function NotesliteWorkspace({ initialData }: { initialData?: any 
             colName={editorData.colName} 
             cardTitle={editorData.cardTitle} 
             cardData={cardsData[editorData.cardTitle]}
-            setCardData={(data) => setCardsData(prev => ({ ...prev, [editorData.cardTitle]: data }))}
+            setCardData={(data) => {
+              setCardsData(prev => ({ ...prev, [editorData.cardTitle]: data }));
+              
+              if (workspaceId) {
+                // Debounce patching
+                if ((window as any)._saveTimeout) clearTimeout((window as any)._saveTimeout);
+                (window as any)._saveTimeout = setTimeout(() => {
+                  fetch(`/api/workspaces/${workspaceId}/cards/${editorData.cardTitle}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json', 'x-client-id': clientId },
+                    body: JSON.stringify({ content: data.blocks, title: data.title || data.blocks[0]?.v })
+                  }).catch(console.error);
+                }, 500);
+              }
+            }}
             closeEditor={closeEditor} 
             triggerToast={triggerToast}
             handleDeleteCard={handleDeleteCard}

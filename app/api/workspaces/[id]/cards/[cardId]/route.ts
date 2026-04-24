@@ -14,7 +14,7 @@ const updateCardSchema = z
   .object({
     title: z.string().trim().min(1).max(160).optional(),
     coverImage: z.string().trim().url().max(2048).nullable().optional(),
-    content: z.record(z.string(), z.unknown()).nullable().optional(),
+    content: z.any().nullable().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, {
     message: "No updates provided.",

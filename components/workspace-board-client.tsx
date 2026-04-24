@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect, useCallback, type CSSProperties, type DragEvent } from "react";
+import { useMemo, useState, useEffect, useCallback, useRef, type CSSProperties, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import LoadingScreen from "@/components/loading-screen";
@@ -418,6 +418,47 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
 
   const cardsCount = useMemo(() => countCards(board), [board]);
 
+  // ── Auto-save cards on block changes ──
+  const previousCardsRef = useRef<Map<string, any[]>>(new Map());
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    const timeoutId = setTimeout(() => {
+      const currentCards = new Map<string, any[]>();
+      const changedCards: { id: string; blocks: any[] }[] = [];
+
+      for (const column of board.columns) {
+        for (const card of column.cards) {
+          currentCards.set(card.id, card.blocks);
+
+          const prevBlocks = previousCardsRef.current.get(card.id);
+          // If prevBlocks exists and differs, we have an update
+          if (prevBlocks && JSON.stringify(prevBlocks) !== JSON.stringify(card.blocks)) {
+            changedCards.push({ id: card.id, blocks: card.blocks });
+          }
+        }
+      }
+
+      // Update the ref to match current state
+      previousCardsRef.current = currentCards;
+
+      // Dispatch PATCH for each changed card
+      for (const changed of changedCards) {
+        fetch(`/api/workspaces/${workspaceId}/cards/${changed.id}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "x-client-id": clientId,
+          },
+          body: JSON.stringify({ content: changed.blocks }),
+        }).catch(console.error);
+      }
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [board.columns, workspaceId, clientId, isLoading]);
+
   useEffect(() => {
     const previousBodyOverflow = document.body.style.overflow;
     const previousBodyOverscroll = document.body.style.overscrollBehavior;
@@ -462,21 +503,65 @@ export default function WorkspaceBoardClient({ workspaceId }: { workspaceId: str
     [updateBoard],
   );
 
-  const addNewColumn = useCallback(() => {
-    const newColumn = createColumn(`Column ${board.columns.length + 1}`);
-    updateBoard((current) => ({ ...current, columns: [...current.columns, newColumn] }));
-    setSelectedColumnId(newColumn.id);
-    setSelectedCardId(null);
-    setEditingColumnId(newColumn.id);
-    setColumnTitleDraft(newColumn.title);
-  }, [board.columns.length, updateBoard]);
+  const addNewColumn = useCallback(async () => {
+    const title = `Column ${board.columns.length + 1}`;
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/columns`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-client-id": clientId,
+        },
+        body: JSON.stringify({ name: title }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to create column");
+      }
+
+      const { column } = await response.json();
+
+      setSelectedColumnId(column.id);
+      setSelectedCardId(null);
+      setEditingColumnId(column.id);
+      setColumnTitleDraft(column.name || title);
+    } catch (error) {
+      console.error(error);
+    }
+  }, [board.columns.length, workspaceId, clientId]);
 
   const addCardToColumn = useCallback(
-    (columnId: string, initialBlockType: BlockType = "note") => {
-      const targetColumn = board.columns.find((column) => column.id === columnId);
-      insertCardAt(columnId, targetColumn?.cards.length ?? 0, initialBlockType);
+    async (columnId: string, initialBlockType: BlockType = "note") => {
+      try {
+        const title = "New Card";
+        const content = [createBlock(initialBlockType)];
+
+        const response = await fetch(`/api/workspaces/${workspaceId}/cards`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-client-id": clientId,
+          },
+          body: JSON.stringify({
+            title,
+            columnId,
+            content,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to create card");
+        }
+
+        const { card } = await response.json();
+
+        setSelectedColumnId(columnId);
+        setSelectedCardId(card.id);
+      } catch (error) {
+        console.error(error);
+      }
     },
-    [board.columns, insertCardAt],
+    [workspaceId, clientId],
   );
 
   const addBlockFromSidebar = useCallback(

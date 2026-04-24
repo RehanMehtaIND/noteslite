@@ -34,14 +34,15 @@ export default async function RootLayout({
     if (user) {
       const dbUser = await prisma.user.findUnique({
         where: { id: user.id },
-        select: { theme: true },
       });
-      if (dbUser?.theme) {
-        themeClass = `theme-${dbUser.theme}`;
+      // The theme might be available if the generated client is up to date, otherwise use any cast
+      const theme = (dbUser as any)?.theme;
+      if (theme) {
+        themeClass = `theme-${theme}`;
       }
     }
   } catch (err) {
-    console.error("Layout theme error:", err);
+    console.warn("Layout theme error (safe to ignore if Prisma client is regenerating):", err);
   }
 
   return (
