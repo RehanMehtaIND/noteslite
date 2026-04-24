@@ -22,13 +22,12 @@
         "name": "next"
       }
     ],
+    "baseUrl": ".",
     "paths": {
-      "@/frontend/*": ["./src/frontend/*"],
-      "@/backend/*": ["./src/backend/*"],
-      "@/components/*": ["./src/frontend/components/*"],
-      "@/hooks/*": ["./src/frontend/hooks/*"],
-      "@/lib/*": ["./src/backend/lib/*"],
-      "@/*": ["./src/*"]
+      "@/lib/*": ["src/backend/lib/*"],
+      "@/components/*": ["src/frontend/components/*"],
+      "@/hooks/*": ["src/frontend/hooks/*"],
+      "@/*": ["src/*"]
     }
   },
   "include": [
