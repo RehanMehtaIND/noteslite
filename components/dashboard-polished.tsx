@@ -180,6 +180,7 @@ export default function DashboardPolished() {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   const [view, setView] = useState<View>("dashboard");
   const [templateSubView, setTemplateSubView] = useState<TemplateType | null>(null);
@@ -730,12 +731,16 @@ export default function DashboardPolished() {
 
   useEffect(() => {
     function onDocumentClick(event: MouseEvent) {
-      if (!profileWrapRef.current) return;
-      if (!profileWrapRef.current.contains(event.target as Node)) {
+      const target = event.target as HTMLElement;
+
+      if (profileWrapRef.current && !profileWrapRef.current.contains(target)) {
         setProfileOpen(false);
       }
-      // Also close workspace menu if clicking elsewhere
-      setWsMenuOpenId(null);
+
+      // Only close workspace menu if clicking outside the button and the menu itself
+      if (!target.closest(".ws-delete-btn") && !target.closest(".ws-card-menu")) {
+        setWsMenuOpenId(null);
+      }
     }
 
     document.addEventListener("click", onDocumentClick);
@@ -1074,16 +1079,21 @@ export default function DashboardPolished() {
         <div className="deco-ring" />
         <div className="deco-ring2" />
 
-        <div className={`sb-backdrop ${mobileSidebarOpen ? "visible" : ""}`} onClick={() => setMobileSidebarOpen(false)} />
-
         <div className="app">
+          <div className={`sb-backdrop ${mobileSidebarOpen ? "visible" : ""}`} onClick={() => setMobileSidebarOpen(false)} />
           <aside className={`sidebar ${sidebarCollapsed ? "collapsed" : ""} ${mobileSidebarOpen ? "mobile-open" : ""}`}>
             <div className="sidebar-top">
               <button
                 className="sb-toggle"
                 type="button"
                 title="Toggle sidebar"
-                onClick={() => setSidebarCollapsed((current) => !current)}
+                onClick={() => {
+                  if (typeof window !== "undefined" && window.innerWidth <= 768) {
+                    setMobileSidebarOpen(false);
+                  } else {
+                    setSidebarCollapsed((current) => !current);
+                  }
+                }}
               >
                 <span className="l1" />
                 <span className="l2" />
@@ -1222,19 +1232,26 @@ export default function DashboardPolished() {
 
           <div className="main">
             <div className="topbar">
-              <button className="mobile-ham" type="button" onClick={() => setMobileSidebarOpen(true)}>
-                <span />
-                <span />
-                <span />
-              </button>
+              {!mobileSearchOpen && (
+                <>
+                  <button className="mobile-ham" type="button" onClick={() => {
+                    setSidebarCollapsed(false);
+                    setMobileSidebarOpen(true);
+                  }}>
+                    <span />
+                    <span />
+                    <span />
+                  </button>
 
-              <div className="topbar-context">
-                <div className="ctx-page">{view === "dashboard" ? "Dashboard" : view === "quick-notes" ? "Quick Notes" : "Templates"}</div>
-                {templateSubView ? <div className="ctx-sep">/</div> : null}
-                {templateSubView ? (
-                  <div className="ctx-sub">{TEMPLATE_ITEMS.find((item) => item.id === templateSubView)?.title}</div>
-                ) : null}
-              </div>
+                  <div className="topbar-context">
+                    <div className="ctx-page">{view === "dashboard" ? "Dashboard" : view === "quick-notes" ? "Quick Notes" : "Templates"}</div>
+                    {templateSubView ? <div className="ctx-sep">/</div> : null}
+                    {templateSubView ? (
+                      <div className="ctx-sub">{TEMPLATE_ITEMS.find((item) => item.id === templateSubView)?.title}</div>
+                    ) : null}
+                  </div>
+                </>
+              )}
 
               <div className="devices-row" title={`${sessions.length} devices synced`}>
                 <div className="sync-wave">
@@ -1269,7 +1286,7 @@ export default function DashboardPolished() {
                 })}
               </div>
 
-              <div className="search-bar">
+              <div className={`search-bar ${mobileSearchOpen ? "mobile-open" : ""}`}>
                 <span className="search-icon">⌕</span>
                 <input
                   type="search"
@@ -1281,16 +1298,33 @@ export default function DashboardPolished() {
                   data-1p-ignore="true"
                   placeholder="Search workspaces..."
                   value={searchValue}
+                  autoFocus={mobileSearchOpen}
                   onChange={(event) => setSearchValue(event.target.value)}
+                  onKeyDown={(e) => e.key === "Escape" && setMobileSearchOpen(false)}
                 />
               </div>
 
-              <button className="new-btn" type="button" onClick={() => setCreateOpen(true)}>
-                <span>+</span>
-                <span>New Workspace</span>
-              </button>
+              {mobileSearchOpen && (
+                <button className="search-cancel-btn" onClick={() => setMobileSearchOpen(false)}>Cancel</button>
+              )}
 
-              <div className="header-actions" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              {!mobileSearchOpen && (
+                <button className="new-btn" type="button" onClick={() => setCreateOpen(true)}>
+                  <span>+</span>
+                  <span>New Workspace</span>
+                </button>
+              )}
+
+              {!mobileSearchOpen && (
+                <div className="header-actions" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <button 
+                    className="mobile-search-btn" 
+                    type="button" 
+                    onClick={() => setMobileSearchOpen(true)}
+                    title="Search"
+                  >
+                    <span style={{ fontSize: "18px" }}>⌕</span>
+                  </button>
                 <button
                   className="notif-btn"
                   type="button"
@@ -1301,7 +1335,8 @@ export default function DashboardPolished() {
                   {notifVisible ? <div className="notif-badge" /> : null}
                 </button>
 
-              </div>
+                </div>
+              )}
             </div>
 
             <div className="content">
@@ -2237,6 +2272,35 @@ export default function DashboardPolished() {
           border: 2px solid var(--surface);
         }
 
+        .mobile-search-btn {
+          display: none;
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          border: 1px solid var(--border2);
+          background: var(--surface);
+          color: var(--text3);
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+        .mobile-search-btn:hover { background: var(--bg2); color: var(--text); }
+
+        .search-cancel-btn {
+          background: none;
+          border: none;
+          color: var(--blue);
+          font-family: "Syne", sans-serif;
+          font-size: 11px;
+          font-weight: 700;
+          cursor: pointer;
+          padding: 0 4px;
+          flex-shrink: 0;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+        }
+
         .profile-dropdown {
           position: absolute;
           top: calc(100% + 10px);
@@ -2992,8 +3056,8 @@ export default function DashboardPolished() {
           display: none;
           position: fixed;
           inset: 0;
-          background: rgba(0, 0, 0, 0.3);
-          backdrop-filter: blur(3px);
+          background: rgba(0, 0, 0, 0.45);
+          backdrop-filter: blur(2px);
           z-index: 45;
         }
 
@@ -3020,10 +3084,56 @@ export default function DashboardPolished() {
           }
 
           .sidebar.mobile-open { transform: translateX(0); }
+
+          .sidebar.collapsed .brand-text,
+          .sidebar.collapsed .sb-lbl,
+          .sidebar.collapsed .sb-section-lbl,
+          .sidebar.collapsed .user-info-sb,
+          .sidebar.collapsed .tmpl-badge {
+            opacity: 1 !important;
+            max-width: 500px !important;
+            pointer-events: auto !important;
+            color: inherit !important;
+            display: block !important;
+          }
+          .sidebar.collapsed .sb-item {
+            justify-content: flex-start !important;
+            padding: 8px 10px !important;
+          }
+          .sidebar.collapsed .sb-section-lbl::after {
+            display: none !important;
+          }
+          .sidebar.collapsed .user-card {
+            padding: 8px 10px !important;
+            justify-content: flex-start !important;
+          }
+
           .mobile-ham { display: flex; }
           .devices-row { display: none; }
-          .topbar { padding: 0 14px; }
+          .topbar { 
+            padding: 0 12px; 
+            height: 54px;
+            gap: 8px;
+            justify-content: space-between;
+          }
+          .search-bar { display: none; }
+          .search-bar.mobile-open {
+            display: flex !important;
+            flex: 1;
+            max-width: none;
+            animation: fadeUp 0.2s ease-out;
+          }
+          .mobile-search-btn { display: flex; }
+          .topbar-context { flex: 1; margin-left: 4px; }
+          .ctx-page { font-size: 14px; }
+          .new-btn { 
+            width: 34px; 
+            padding: 0; 
+            justify-content: center; 
+            border-radius: 10px;
+          }
           .new-btn span:last-child { display: none; }
+          .header-actions { gap: 8px !important; }
           .content { padding: 16px; }
           .workspace-grid, .tmpl-grid { grid-template-columns: 1fr; }
         }
