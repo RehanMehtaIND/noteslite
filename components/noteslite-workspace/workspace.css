@@ -850,8 +850,9 @@
   flex: 1;
   overflow-y: auto;
   display: flex;
-  justify-content: center;
-  padding: 40px 24px;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 0 80px 0;
 }
 
 .noteslite-editor-body::-webkit-scrollbar {
@@ -865,19 +866,21 @@
 
 .noteslite-editor-doc {
   width: 100%;
-  max-width: 720px;
+  max-width: 768px;
+  padding: 0 48px;
+  position: relative;
 }
 
 /* Card cover */
 .noteslite-card-cover-area {
   width: 100%;
-  height: 180px;
-  border-radius: var(--r);
-  margin-bottom: 28px;
+  height: 240px;
+  flex-shrink: 0;
+  margin-bottom: 0;
   background: linear-gradient(135deg, var(--cover-a, #C07850) 0%, var(--cover-b, #D4956E) 100%);
   position: relative;
   overflow: hidden;
-  animation: fadeUp2 .4s both;
+  animation: fadeDown .4s both;
 }
 
 @keyframes fadeUp2 {
@@ -914,11 +917,11 @@
 }
 
 .noteslite-cover-emoji {
-  position: absolute;
-  bottom: -8px;
-  left: 24px;
-  font-size: 48px;
+  font-size: 72px;
+  margin-top: -36px;
+  margin-bottom: 16px;
   filter: drop-shadow(var(--shadow));
+  line-height: 1;
 }
 
 /* Card title */
@@ -927,6 +930,9 @@
   background: none;
   border: none;
   outline: none;
+  resize: none;
+  overflow: hidden;
+  word-wrap: break-word;
   font-family: 'Playfair Display', serif;
   font-size: 34px;
   font-weight: 700;
@@ -983,6 +989,23 @@
   background: var(--bg2);
 }
 
+.noteslite-block-row.dragging {
+  opacity: 0.4;
+}
+
+.noteslite-block-row.drag-over::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: var(--accent);
+  border-radius: 1px;
+  pointer-events: none;
+  z-index: 10;
+}
+
 .noteslite-block-handle {
   width: 18px;
   height: 24px;
@@ -1025,6 +1048,30 @@
   color: var(--accent);
 }
 
+.noteslite-block-delete-btn {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  cursor: pointer;
+  color: var(--text3);
+  font-size: 18px;
+  transition: opacity .15s, color .15s;
+  margin-top: 2px;
+  margin-left: 4px;
+}
+
+.noteslite-block-row:hover .noteslite-block-delete-btn {
+  opacity: 1;
+}
+
+.noteslite-block-delete-btn:hover {
+  color: #E06C75; /* A soft red color for delete */
+}
+
 .noteslite-block-content {
   flex: 1;
   min-width: 0;
@@ -1045,11 +1092,35 @@
   min-height: 28px;
 }
 
+.noteslite-b-p::placeholder,
+.noteslite-b-h1::placeholder,
+.noteslite-b-h2::placeholder,
+.noteslite-b-h3::placeholder,
+.noteslite-b-todo-text::placeholder,
+.noteslite-b-bullet-text::placeholder,
+.noteslite-b-num-text::placeholder {
+  color: transparent;
+  transition: color 0.15s;
+}
+
+.noteslite-b-p:focus::placeholder,
+.noteslite-b-h1:focus::placeholder,
+.noteslite-b-h2:focus::placeholder,
+.noteslite-b-h3:focus::placeholder,
+.noteslite-b-todo-text:focus::placeholder,
+.noteslite-b-bullet-text:focus::placeholder,
+.noteslite-b-num-text:focus::placeholder {
+  color: var(--text3);
+}
+
 .noteslite-b-h1 {
   width: 100%;
   background: none;
   border: none;
   outline: none;
+  resize: none;
+  overflow: hidden;
+  word-wrap: break-word;
   font-family: 'Playfair Display', serif;
   font-size: 26px;
   font-weight: 700;
@@ -1063,6 +1134,9 @@
   background: none;
   border: none;
   outline: none;
+  resize: none;
+  overflow: hidden;
+  word-wrap: break-word;
   font-family: 'Syne', sans-serif;
   font-size: 18px;
   font-weight: 700;
@@ -1076,6 +1150,9 @@
   background: none;
   border: none;
   outline: none;
+  resize: none;
+  overflow: hidden;
+  word-wrap: break-word;
   font-family: 'Syne', sans-serif;
   font-size: 14px;
   font-weight: 700;

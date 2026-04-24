@@ -95,6 +95,19 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
 
         setColumns(newColumns);
         setCardsData(newCardsData);
+        setCanvasItems(prev => {
+          // If we have items that aren't columns, keep them. 
+          // For columns, merge data from newColumns (especially cards) but keep x,y,w,h,z if they existed.
+          const nonCols = prev.filter(i => i.type !== 'column');
+          const mergedCols = newColumns.map((nc: any) => {
+            const existing = prev.find(p => p.id === nc.id && p.type === 'column');
+            if (existing) {
+              return { ...existing, ...nc, x: existing.x, y: existing.y, w: existing.w, h: existing.h, z: existing.z };
+            }
+            return nc;
+          });
+          return [...nonCols, ...mergedCols];
+        });
       } catch (err) {
         console.error("Failed to load workspace:", err);
       }
@@ -123,6 +136,12 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
         }
         return col;
       }));
+      setCanvasItems(prev => prev.map(i => {
+        if (i.id === card.columnId && i.type === 'column' && !i.cards?.includes(card.id)) {
+          return { ...i, cards: [...(i.cards || []), card.id] };
+        }
+        return i;
+      }));
     },
     onCardUpdated: (card: any) => {
       setCardsData(prev => ({
@@ -136,6 +155,13 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
     },
     onColumnCreated: (column: any) => {
       setColumns(prev => {
+        if (prev.some(c => c.id === column.id)) return prev;
+        return [...prev, {
+          id: column.id, type: 'column', title: column.name, cards: [],
+          x: 50, y: 50, w: 232, z: 1, color: 'brand'
+        }];
+      });
+      setCanvasItems(prev => {
         if (prev.some(c => c.id === column.id)) return prev;
         return [...prev, {
           id: column.id, type: 'column', title: column.name, cards: [],
@@ -239,6 +265,7 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
         return newColumns;
       });
       const colName = targetColId ? columns.find(c => c.id === targetColId)?.title : columns[0]?.title;
+      setCanvasItems(prev => prev.map(i => i.id === targetColId ? { ...i, cards: [...(i.cards || []), newId] } : i));
       if (colName) openCardEditor(colName, newId);
       return;
     }
@@ -275,6 +302,7 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
       });
 
       const colName = targetColId ? columns.find(c => c.id === targetColId)?.title : columns[0]?.title;
+      setCanvasItems(prev => prev.map(i => i.id === targetColId ? { ...i, cards: [...(i.cards || []), newId] } : i));
       if (colName) openCardEditor(colName, newId);
     } catch (err) {
       console.error(err);
@@ -286,6 +314,12 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
       ...col,
       cards: (col.cards || []).filter((c: string) => c !== cardTitle)
     })));
+    setCanvasItems(prev => prev.map(item => {
+      if (item.type === 'column') {
+        return { ...item, cards: (item.cards || []).filter((c: string) => c !== cardTitle) };
+      }
+      return item;
+    }));
     setCardsData(prev => {
       const next = { ...prev };
       delete next[cardTitle];
@@ -343,6 +377,32 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
 
       return newColumns;
     });
+    setCanvasItems(prev => {
+      const sourceCol = prev.find(c => c.id === sourceColId);
+      const targetCol = prev.find(c => c.id === targetColId);
+      if (!sourceCol || !targetCol) return prev;
+
+      return prev.map(i => {
+        if (i.id === sourceColId) {
+          const newCards = (i.cards || []).filter((c: string) => c !== cardTitle);
+          if (sourceColId === targetColId) {
+            const insertIndex = targetIndex !== undefined ? targetIndex : newCards.length;
+            newCards.splice(insertIndex, 0, cardTitle);
+          }
+          return { ...i, cards: newCards };
+        }
+        if (i.id === targetColId && sourceColId !== targetColId) {
+          const newCards = [...(i.cards || [])];
+          if (targetIndex !== undefined) {
+            newCards.splice(targetIndex, 0, cardTitle);
+          } else {
+            newCards.push(cardTitle);
+          }
+          return { ...i, cards: newCards };
+        }
+        return i;
+      });
+    });
   };
 
   return (
@@ -391,6 +451,7 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
                   triggerToast('Item removed');
                 }
               }}
+              cardsData={cardsData}
             />
           )}
         </div>
@@ -410,10 +471,11 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
                 // Debounce patching
                 if ((window as any)._saveTimeout) clearTimeout((window as any)._saveTimeout);
                 (window as any)._saveTimeout = setTimeout(() => {
+                  const firstTextBlock = data.blocks?.find((b: any) => ['p', 'h1', 'h2', 'h3'].includes(b.t) && b.v)?.v;
                   fetch(`/api/workspaces/${workspaceId}/cards/${editorData.cardTitle}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json', 'x-client-id': clientId },
-                    body: JSON.stringify({ content: data.blocks, title: data.title || data.blocks[0]?.v })
+                    body: JSON.stringify({ content: data.blocks, title: data.title || firstTextBlock })
                   }).catch(console.error);
                 }, 500);
               }

@@ -8,9 +8,10 @@ interface CanvasViewProps {
   openCardEditor: (colName: string, cardTitle: string) => void;
   columns: any[];
   onDeleteItem: (id: string) => void;
+  cardsData: Record<string, any>;
 }
 
-export default function CanvasView({ items, setItems, connections, triggerToast, openCardEditor, columns, onDeleteItem }: CanvasViewProps) {
+export default function CanvasView({ items, setItems, connections, triggerToast, openCardEditor, columns, onDeleteItem, cardsData }: CanvasViewProps) {
   const frameRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const [cam, setCam] = useState({ x: 0, y: 0 });
@@ -238,11 +239,14 @@ export default function CanvasView({ items, setItems, connections, triggerToast,
             <div className="noteslite-cv-col-desc">{item.desc || ''}</div>
           </div>
           <div className="noteslite-cv-col-cards">
-            {(item.cards || []).map((c: string, idx: number) => (
-              <div key={idx} className="noteslite-cv-card-pill" onClick={() => openCardEditor(item.title, c)}>
-                {c}
-              </div>
-            ))}
+            {(item.cards || []).map((c: string, idx: number) => {
+              const cardMeta = cardsData[c] || { title: c };
+              return (
+                <div key={idx} className="noteslite-cv-card-pill" onClick={() => openCardEditor(item.title, c)}>
+                  {cardMeta.title || cardMeta.blocks?.find((b: any) => ['p', 'h1', 'h2', 'h3'].includes(b.t) && b.v)?.v || c}
+                </div>
+              );
+            })}
           </div>
           {toolbar}
         </>
