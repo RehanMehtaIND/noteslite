@@ -614,7 +614,7 @@ export function CanvasView({
 
         {items.length === 0 && uiMode === "expanded" ? (
           <div className="pointer-events-none absolute inset-0 grid place-items-center px-6 text-center">
-            <div className="max-w-[480px] rounded-[26px] border border-dashed border-[color:var(--board-border-strong)] bg-[rgba(255,255,255,0.54)] px-6 py-8 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
+            <div className="max-w-[480px] rounded-[26px] border border-dashed border-[color:var(--board-border-strong)] bg-[color:var(--board-panel-bg)] px-6 py-8 shadow-[var(--board-shadow-panel)]">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--board-text-soft)]">
                 Freeform workspace
               </p>
@@ -640,7 +640,7 @@ export function CanvasView({
                 onSelectItem(item.id);
                 onItemsChange((currentItems) => bringCanvasItemToFront(currentItems, item.id));
               }}
-              className={`absolute overflow-hidden rounded-[24px] border bg-[rgba(246,247,250,0.96)] shadow-[var(--board-shadow-card)] transition-[box-shadow,transform,border-color,opacity] duration-[var(--board-motion-base)] ease-[var(--board-ease-standard)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--board-focus-ring)] ${
+              className={`absolute overflow-hidden rounded-[24px] border bg-[color:var(--board-panel-bg)] shadow-[var(--board-shadow-card)] transition-[box-shadow,transform,border-color,opacity] duration-[var(--board-motion-base)] ease-[var(--board-ease-standard)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--board-focus-ring)] ${
                 isSelected
                   ? "border-[color:var(--board-border-accent)] shadow-[0_26px_42px_rgba(47,43,40,0.16)]"
                   : "border-[color:var(--board-border)] hover:border-[color:var(--board-border-strong)] hover:shadow-[0_18px_30px_rgba(47,43,40,0.14)]"
@@ -654,15 +654,7 @@ export function CanvasView({
             >
               <div className="flex h-full flex-col">
                 <div
-                  className={`flex items-center gap-3 border-b border-[color:var(--board-border)] px-4 py-3 ${
-                    item.type === "image"
-                      ? "bg-[linear-gradient(90deg,rgba(120,154,177,0.18)_0%,rgba(255,255,255,0.68)_100%)]"
-                      : item.type === "board-card"
-                        ? "bg-[linear-gradient(90deg,rgba(127,123,125,0.14)_0%,rgba(255,255,255,0.68)_100%)]"
-                        : item.type === "column-shell"
-                          ? "bg-[linear-gradient(90deg,rgba(134,100,73,0.14)_0%,rgba(255,255,255,0.68)_100%)]"
-                          : "bg-[linear-gradient(90deg,rgba(118,123,134,0.12)_0%,rgba(255,255,255,0.68)_100%)]"
-                  }`}
+                  className={`flex items-center gap-3 border-b border-[color:var(--board-border)] px-4 py-3 bg-[color:var(--board-panel-bg)]`}
                 >
                   <div className="mr-auto min-w-0">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--board-text-soft)]">

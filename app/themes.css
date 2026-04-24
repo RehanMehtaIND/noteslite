@@ -1,0 +1,406 @@
+/* ============================================================
+   Global Themes — SINGLE SOURCE OF TRUTH
+   All UI surfaces inherit from body.theme-*
+   ============================================================ */
+
+/* ─── Standard (Light) ─── */
+body.theme-standard {
+  /* Core palette — used by dashboard-polished, workspace, canvas, loading */
+  --bg: #ebe4da;
+  --bg2: #e3ddd4;
+  --surface: #f5f0e8;
+  --surface2: #fdfaf5;
+  --border: rgba(44, 38, 28, 0.07);
+  --border2: rgba(44, 38, 28, 0.12);
+  --text: #2c2018;
+  --text2: #6b6155;
+  --text3: #a09080;
+  --accent: #c07850;
+  --accent-l: rgba(192,120,80,0.12);
+  --green: #5a8a6a;
+  --blue: #5a7a9a;
+  --rose: #a06878;
+  --gold: #B8963C;
+  --frame: #6ba3be;
+  --shadow: 0 2px 20px rgba(44, 38, 28, 0.09);
+  --shadow-lg: 0 8px 48px rgba(44, 38, 28, 0.14);
+  --shadow-card: 0 4px 28px rgba(44, 38, 28, 0.11);
+  --r: 16px;
+  --r-lg: 22px;
+  --r-sm: 8px;
+  --r-xs: 6px;
+
+  /* Loading screen */
+  --loader-bg: #e9e4da;
+  --loader-card-bg: #f2eee7;
+  --loader-text: #1a1714;
+  --loader-muted: #a09890;
+  --loader-line: #c8c1b8;
+
+  /* Workspace board */
+  --board-canvas: #ebe4da;
+  --board-text: #2c2018;
+  --board-shell-bg: rgba(245, 240, 232, 0.88);
+  --board-panel-bg: rgba(253, 250, 245, 0.9);
+  --board-shell-border: rgba(44, 38, 28, 0.12);
+
+  /* Canvas grid dots */
+  --canvas-dot: rgba(44,38,28,0.1);
+
+  /* Auth */
+  --auth-bg: #d9c8bb;
+  --auth-card: #dfddd4;
+  --auth-panel-top: #efe9eb;
+  --auth-panel-bottom: #eca7ad;
+  --auth-input: #c1b7b8;
+  --auth-input-focus: #cec3c3;
+  --auth-input-placeholder: #6d6a6a;
+  --auth-title: #4f4f51;
+  --auth-copy: #575251;
+  --auth-divider: #b7abaa;
+  --auth-primary-start: #e8bfb8;
+  --auth-primary-end: #cf9590;
+  --auth-secondary: #d4c3be;
+  --auth-secondary-hover: #ccb9b4;
+  --auth-primary-text: #ffffff;
+  --auth-secondary-text: #1f1f1f;
+  --auth-focus: #4f4f51;
+  --auth-error: #c0392b;
+
+  /* Dashboard modals */
+  --dashboard-modal-overlay: rgba(31, 33, 38, 0.22);
+  --dashboard-modal-panel-base: #f2eee8;
+  --dashboard-modal-panel-gradient: linear-gradient(180deg, rgba(246, 243, 238, 0.98) 0%, rgba(236, 238, 242, 0.96) 100%);
+  --dashboard-modal-border: rgba(211, 213, 221, 0.92);
+  --dashboard-modal-shadow: 0 28px 70px rgba(57, 49, 44, 0.24);
+  --dashboard-modal-ring: rgba(118, 123, 134, 0.34);
+
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* ─── Dark ─── */
+body.theme-dark {
+  color-scheme: dark;
+
+  /* Core palette */
+  --bg: #1a1a1a;
+  --bg2: #222222;
+  --surface: #252525;
+  --surface2: #2d2d2d;
+  --border: rgba(255, 255, 255, 0.08);
+  --border2: rgba(255, 255, 255, 0.12);
+  --text: #e0e0e0;
+  --text2: #b0b0b0;
+  --text3: #777777;
+  --accent: #d4956e;
+  --accent-l: rgba(212,149,110,0.15);
+  --green: #5ea87a;
+  --blue: #7a9abb;
+  --rose: #c08898;
+  --gold: #d4b064;
+  --frame: #5a8eb0;
+  --shadow: 0 2px 20px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 48px rgba(0, 0, 0, 0.5);
+  --shadow-card: 0 4px 28px rgba(0, 0, 0, 0.4);
+  --r: 16px;
+  --r-lg: 22px;
+  --r-sm: 8px;
+  --r-xs: 6px;
+
+  /* Auth */
+  --auth-bg: #1a1a1a;
+  --auth-card: #222222;
+  --auth-panel-top: #2c2c2c;
+  --auth-panel-bottom: #3a2a2d;
+  --auth-input: #333333;
+  --auth-input-focus: #444444;
+  --auth-input-placeholder: #888888;
+  --auth-title: #e0e0e0;
+  --auth-copy: #cccccc;
+  --auth-divider: #444444;
+  --auth-primary-start: #6a403a;
+  --auth-primary-end: #5a3530;
+  --auth-secondary: #3d3432;
+  --auth-secondary-hover: #4a403d;
+  --auth-primary-text: #ffffff;
+  --auth-secondary-text: #e0e0e0;
+  --auth-focus: #e0e0e0;
+
+  /* Dashboard modals */
+  --dashboard-modal-overlay: rgba(0, 0, 0, 0.6);
+  --dashboard-modal-panel-base: #1e1e1e;
+  --dashboard-modal-panel-gradient: linear-gradient(180deg, rgba(30,30,30,0.98) 0%, rgba(20,20,20,0.96) 100%);
+  --dashboard-modal-border: rgba(255, 255, 255, 0.1);
+  --dashboard-modal-shadow: 0 28px 70px rgba(0, 0, 0, 0.8);
+  --dashboard-modal-ring: rgba(255, 255, 255, 0.2);
+
+  /* Loading screen */
+  --loader-bg: #1a1a1a;
+  --loader-card-bg: #252525;
+  --loader-text: #e0e0e0;
+  --loader-muted: #888888;
+  --loader-line: #444444;
+
+  /* Workspace board */
+  --board-canvas: #1a1a1a;
+  --board-text: #e0e0e0;
+  --board-shell-bg: rgba(30, 30, 30, 0.88);
+  --board-panel-bg: rgba(40, 40, 40, 0.9);
+  --board-shell-border: rgba(255, 255, 255, 0.1);
+
+  /* Canvas grid dots */
+  --canvas-dot: rgba(255,255,255,0.08);
+
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* ─── Space ─── */
+body.theme-space {
+  color-scheme: dark;
+
+  /* Core palette */
+  --bg: #0f0c29;
+  --bg2: #151240;
+  --surface: #1a1650;
+  --surface2: #201c5a;
+  --border: rgba(255, 255, 255, 0.1);
+  --border2: rgba(255, 255, 255, 0.15);
+  --text: #ffffff;
+  --text2: #c7c6e0;
+  --text3: #8a88b5;
+  --accent: #d4956e;
+  --accent-l: rgba(212,149,110,0.15);
+  --green: #34d399;
+  --blue: #60a5fa;
+  --rose: #f0a0b8;
+  --gold: #fbbf24;
+  --frame: #7a88cc;
+  --shadow: 0 2px 20px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 8px 48px rgba(0, 0, 0, 0.6);
+  --shadow-card: 0 4px 28px rgba(0, 0, 0, 0.5);
+  --r: 16px;
+  --r-lg: 22px;
+  --r-sm: 8px;
+  --r-xs: 6px;
+
+  /* Auth */
+  --auth-bg: #151336;
+  --auth-card: #201c4a;
+  --auth-panel-top: #2a255b;
+  --auth-panel-bottom: #392b6a;
+  --auth-input: #312c6a;
+  --auth-input-focus: #413a8a;
+  --auth-input-placeholder: #8a88b5;
+  --auth-title: #ffffff;
+  --auth-copy: #dcdcf2;
+  --auth-divider: #453c7a;
+  --auth-primary-start: #4a388b;
+  --auth-primary-end: #3b2a76;
+  --auth-secondary: #2f2a5a;
+  --auth-secondary-hover: #3a346a;
+  --auth-primary-text: #ffffff;
+  --auth-secondary-text: #f0f0f5;
+  --auth-focus: #ffffff;
+
+  /* Dashboard modals */
+  --dashboard-modal-overlay: rgba(5, 3, 20, 0.7);
+  --dashboard-modal-panel-base: #1a1640;
+  --dashboard-modal-panel-gradient: linear-gradient(180deg, rgba(26,22,64,0.98) 0%, rgba(15,12,41,0.96) 100%);
+  --dashboard-modal-border: rgba(255, 255, 255, 0.15);
+  --dashboard-modal-shadow: 0 28px 70px rgba(0, 0, 0, 0.9);
+  --dashboard-modal-ring: rgba(144, 133, 255, 0.4);
+
+  /* Loading screen */
+  --loader-bg: #0f0c29;
+  --loader-card-bg: #1a1650;
+  --loader-text: #ffffff;
+  --loader-muted: #a09fe0;
+  --loader-line: #4a3e8e;
+
+  /* Workspace board */
+  --board-canvas: #0f0c29;
+  --board-text: #ffffff;
+  --board-shell-bg: rgba(15, 12, 41, 0.88);
+  --board-panel-bg: rgba(48, 43, 99, 0.4);
+  --board-shell-border: rgba(255, 255, 255, 0.2);
+
+  /* Canvas grid dots */
+  --canvas-dot: rgba(255,255,255,0.07);
+
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* ─── Ambient effects per theme ─── */
+body.theme-dark .ambient  { opacity: 0.08 !important; }
+body.theme-space .ambient { opacity: 0.25 !important; filter: blur(100px) saturate(2); }
+
+/* ─── Space theme board background ─── */
+body.theme-space .workspace-board-viewport::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at center, #1b2735 0%, #090a0f 100%);
+  z-index: -1;
+}
+
+/* ─── Dashboard workspace cards: dark/space overlays ─── */
+body.theme-dark .ws-frame,
+body.theme-space .ws-frame {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+body.theme-dark .ws-overlay {
+  background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.5) 100%);
+}
+body.theme-space .ws-overlay {
+  background: linear-gradient(180deg, rgba(15,12,41,0.1) 0%, rgba(15,12,41,0.35) 50%, rgba(15,12,41,0.5) 100%);
+}
+
+body.theme-dark .ws-label,
+body.theme-space .ws-label {
+  background: rgba(0, 0, 0, 0.55);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+body.theme-dark .ws-info,
+body.theme-space .ws-info {
+  background: linear-gradient(0deg, rgba(0,0,0,0.6) 0%, transparent 100%);
+}
+body.theme-dark .ws-meta-txt,
+body.theme-space .ws-meta-txt { color: rgba(255,255,255,0.6); }
+
+body.theme-dark .ws-add,
+body.theme-space .ws-add {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+body.theme-dark .ws-delete-btn,
+body.theme-space .ws-delete-btn {
+  background: rgba(0, 0, 0, 0.6);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+body.theme-dark .ws-card:hover,
+body.theme-space .ws-card:hover {
+  box-shadow: 0 14px 52px rgba(0, 0, 0, 0.5);
+}
+
+body.theme-dark .notif-badge { border-color: #2d2d2d; }
+body.theme-space .notif-badge { border-color: #201c5a; }
+
+/* ─── Dark overlay for modals ─── */
+body.theme-dark .overlay,
+body.theme-space .overlay {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+/* ─── New workspace button ─── */
+body.theme-dark .new-btn:hover { background: #e0e0e0 !important; color: #1a1a1a !important; }
+body.theme-space .new-btn:hover { background: #ffffff !important; color: #0f0c29 !important; }
+
+/* ─── Canvas grid dots per theme ─── */
+body.theme-dark .noteslite-cv-frame,
+body.theme-dark .noteslite-canvas-area {
+  background-image: radial-gradient(circle, var(--canvas-dot) 1px, transparent 1px);
+}
+body.theme-space .noteslite-cv-frame,
+body.theme-space .noteslite-canvas-area {
+  background-image: radial-gradient(circle, var(--canvas-dot) 1px, transparent 1px);
+}
+
+/* ─── Canvas SVG connectors ─── */
+body.theme-dark .noteslite-canvas-svg path,
+body.theme-dark .noteslite-cv-svg path {
+  stroke: rgba(255,255,255,0.15);
+}
+body.theme-space .noteslite-canvas-svg path,
+body.theme-space .noteslite-cv-svg path {
+  stroke: rgba(255,255,255,0.12);
+}
+
+/* ─── Code blocks in dark/space ─── */
+body.theme-dark .noteslite-b-code { background: #111111; }
+body.theme-space .noteslite-b-code { background: #0a0820; }
+
+/* ─── Cover change button ─── */
+body.theme-dark .noteslite-cover-change-btn {
+  background: rgba(30,30,30,0.75);
+  color: #e0e0e0;
+}
+body.theme-space .noteslite-cover-change-btn {
+  background: rgba(15,12,41,0.75);
+  color: #ffffff;
+}
+
+/* ─── Block hover highlight ─── */
+body.theme-dark .noteslite-block-row:hover { background: rgba(255,255,255,0.02); }
+body.theme-space .noteslite-block-row:hover { background: rgba(255,255,255,0.03); }
+
+/* ─── Primary button ─── */
+body.theme-dark .noteslite-tbtn.primary:hover,
+body.theme-dark .noteslite-btn-ok:hover { background: #f0f0f0; color: #1a1a1a; }
+body.theme-space .noteslite-tbtn.primary:hover,
+body.theme-space .noteslite-btn-ok:hover { background: #ffffff; color: #0f0c29; }
+
+/* Workspace background image helper */
+.workspace-board-bg-img {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.4;
+  background-size: cover;
+  background-position: center;
+  transition: opacity 0.7s ease;
+}
+
+/* ─── Profile modal + Preferences ─── */
+body.theme-dark .pm-root,
+body.theme-dark .pref-root {
+  --pm-cream: #1e1e1e;
+  --pm-cream-deep: #2a2a2a;
+  --pm-cream-card: #252525;
+  --pm-ink: #e0e0e0;
+  --pm-ink-muted: #a0a0a0;
+  --pm-ink-faint: #777777;
+  --pm-border: rgba(255, 255, 255, 0.1);
+  --pm-border-strong: rgba(255, 255, 255, 0.15);
+  --pm-teal: #22c55e;
+  --pm-teal-bg: rgba(34, 197, 94, 0.15);
+  --pm-amber: #f59e0b;
+  --pm-amber-bg: rgba(245, 158, 11, 0.15);
+  --pm-purple: #8b5cf6;
+  --pm-purple-bg: rgba(139, 92, 246, 0.15);
+  --pm-red: #ef4444;
+  --pm-red-bg: rgba(239, 68, 68, 0.15);
+  --pm-blue: #3b82f6;
+  --pm-blue-bg: rgba(59, 130, 246, 0.15);
+}
+
+body.theme-space .pm-root,
+body.theme-space .pref-root {
+  --pm-cream: #1a1640;
+  --pm-cream-deep: #251f5c;
+  --pm-cream-card: #1f1b4a;
+  --pm-ink: #ffffff;
+  --pm-ink-muted: #c7c6e0;
+  --pm-ink-faint: #8a88b5;
+  --pm-border: rgba(255, 255, 255, 0.12);
+  --pm-border-strong: rgba(255, 255, 255, 0.2);
+  --pm-teal: #34d399;
+  --pm-teal-bg: rgba(52, 211, 153, 0.15);
+  --pm-amber: #fbbf24;
+  --pm-amber-bg: rgba(251, 191, 36, 0.15);
+  --pm-purple: #a78bfa;
+  --pm-purple-bg: rgba(167, 139, 250, 0.2);
+  --pm-red: #f87171;
+  --pm-red-bg: rgba(248, 113, 113, 0.15);
+  --pm-blue: #60a5fa;
+  --pm-blue-bg: rgba(96, 165, 250, 0.15);
+}

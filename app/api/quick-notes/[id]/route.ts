@@ -4,8 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
 const updateNoteSchema = z.object({
-  title: z.string().min(1, "Title is required").optional(),
-  description: z.string().optional(),
+  title: z.string().min(1, "Title is required").max(50, "Title must be 50 characters or less").optional(),
+  description: z.string().max(500, "Description must be 500 characters or less").optional(),
   color: z.string().optional(),
   pinned: z.boolean().optional(),
 });

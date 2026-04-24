@@ -4,10 +4,14 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import DashboardPolished from "@/components/dashboard-polished";
+import LoadingScreen from "@/components/loading-screen";
+import { useLoadingScreen } from "@/hooks/use-loading-screen";
 
 export default function DashboardPageShell() {
   const router = useRouter();
   const { data: session, status } = useSession();
+  const shouldBlockContent = status === "loading" || !session?.user?.email;
+  const { isVisible, isExiting, workspaceName, variant } = useLoadingScreen(shouldBlockContent);
 
   useEffect(() => {
     if (status === "loading") {
@@ -19,12 +23,8 @@ export default function DashboardPageShell() {
     }
   }, [router, session, status]);
 
-  if (status === "loading" || !session?.user?.email) {
-    return (
-      <div className="min-h-screen bg-[linear-gradient(180deg,#e8e2d9_0%,#dfd5c8_100%)] px-6 py-10 text-[#5c5752]">
-        Loading workspace...
-      </div>
-    );
+  if (isVisible) {
+    return <LoadingScreen exiting={isExiting} workspaceName={workspaceName} variant={variant} />;
   }
 
   return <DashboardPolished />;

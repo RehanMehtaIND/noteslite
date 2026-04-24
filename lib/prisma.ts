@@ -1,20 +1,18 @@
 import { PrismaClient } from "@prisma/client";
 
-const globalForPrisma = globalThis as unknown as {
-  prisma?: PrismaClient;
-};
-
-// Force delete the cached prisma client to pick up recent schema changes
-if (process.env.NODE_ENV !== "production") {
-  delete globalForPrisma.prisma;
-}
-
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
+const prismaClientSingleton = () => {
+  return new PrismaClient({
     log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
   });
+};
+
+declare global {
+  var globalPrisma: undefined | ReturnType<typeof prismaClientSingleton>;
+}
+
+export const prisma = globalThis.globalPrisma ?? prismaClientSingleton();
 
 if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
+  globalThis.globalPrisma = prisma;
+  console.log("Prisma Client Initialized. Models:", Object.keys(prisma).filter(k => !k.startsWith("_") && !k.startsWith("$")));
 }

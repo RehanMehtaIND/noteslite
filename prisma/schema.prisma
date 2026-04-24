@@ -29,6 +29,8 @@ model User {
   avatarUrl         String?     @map("avatar_url")
   displayName       String?     @map("display_name")
   showEmail         Boolean     @default(false) @map("show_email")
+  theme             String?     @default("standard")
+  dashboardBackground String?   @map("dashboard_background")
 
   sessions          Session[]
   quickNotes        QuickNote[]

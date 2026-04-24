@@ -1,5 +1,6 @@
 import React from 'react';
 import { useRouter } from 'next/navigation';
+import { startTeleportLoading } from '@/lib/loading-screen';
 import { ViewMode } from './NotesliteWorkspace';
 
 interface TopBarProps {
@@ -12,10 +13,14 @@ interface TopBarProps {
 
 export default function TopBar({ activeView, switchView, triggerToast, openColModal, openCardEditor }: TopBarProps) {
   const router = useRouter();
+  const handleBack = () => {
+    startTeleportLoading({ workspaceName: 'Dashboard' });
+    router.push('/dashboard');
+  };
 
   return (
     <div className="noteslite-topbar">
-      <button className="noteslite-back-btn" onClick={() => router.push('/dashboard')}>
+      <button className="noteslite-back-btn" onClick={handleBack}>
         ← Dashboard
       </button>
 

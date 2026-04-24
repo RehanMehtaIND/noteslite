@@ -239,20 +239,15 @@ export async function getCurrentUser(): Promise<AuthenticatedUser | null> {
     return null;
   }
 
-  if (session.user.id) {
-    try {
-      const existingUser = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { id: true, googleId: true, name: true, email: true },
-      });
-
-      if (existingUser) {
-        return existingUser;
-      }
-    } catch (error) {
-      console.error("Failed to fetch user by id", error);
-      // Continue with email/googleId fallback before treating as unauthenticated.
-    }
+  // Fast path: if the session already has the DB user ID, we can skip the database lookup.
+  // The JWT callback guarantees that token.sub is the DB UUID.
+  if (session.user.id && session.user.id !== session.user.googleId) {
+    return {
+      id: session.user.id,
+      googleId: session.user.googleId || null,
+      name: session.user.name || session.user.email.split("@")[0] || "User",
+      email: session.user.email,
+    };
   }
 
   const googleId = session.user.googleId;
