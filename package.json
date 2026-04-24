@@ -2,13 +2,10 @@
   "name": "noteslite",
   "version": "2.0.0",
   "private": true,
-  "prisma": {
-    "schema": "./backend/prisma/schema.prisma"
-  },
   "scripts": {
     "dev": "next dev frontend",
     "build": "next build frontend",
-    "vercel-build": "prisma migrate deploy --schema=./backend/prisma/schema.prisma && prisma generate --schema=./backend/prisma/schema.prisma && next build frontend",
+    "vercel-build": "prisma migrate deploy && prisma generate && next build frontend",
     "start": "next start frontend",
     "lint": "next lint frontend",
     "postinstall": "prisma generate",
