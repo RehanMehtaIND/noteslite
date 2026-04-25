@@ -30,22 +30,33 @@ export default function CardEditor({ colName, cardTitle, cardData, setCardData, 
     e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px';
   };
 
+  const isEmptyEditorSpace = (target: HTMLElement): boolean => {
+    // Returns true when the click is on editor "whitespace" — not on any
+    // existing block, the card title, cover area, meta, or emoji.
+    if (!editorBodyRef.current?.contains(target)) return false;
+    if (target.closest('.noteslite-block-row')) return false;
+    if (target.closest('.noteslite-card-title-input')) return false;
+    if (target.closest('.noteslite-card-cover-area')) return false;
+    if (target.closest('.noteslite-card-meta')) return false;
+    if (target.closest('.noteslite-cover-emoji')) return false;
+    if (target.closest('.noteslite-slash-menu')) return false;
+    return true;
+  };
+
   const handleEditorBodyDoubleClick = (e: React.MouseEvent) => {
-    if (e.target === editorBodyRef.current || (e.target as HTMLElement).id === 'noteslite-editorDoc' || (e.target as HTMLElement).className === 'noteslite-blocks-area') {
-      const lastBlock = data.blocks[data.blocks.length - 1];
-      if (!lastBlock || lastBlock.v !== '' || lastBlock.t !== 'p') {
-        insertBlock('p', data.blocks.length);
-      } else {
-        setFocusIndex(data.blocks.length - 1);
-      }
+    if (!isEmptyEditorSpace(e.target as HTMLElement)) return;
+    const lastBlock = data.blocks[data.blocks.length - 1];
+    if (!lastBlock || lastBlock.v !== '' || lastBlock.t !== 'p') {
+      insertBlock('p', data.blocks.length);
+    } else {
+      setFocusIndex(data.blocks.length - 1);
     }
   };
 
   const handleEditorBodyClick = (e: React.MouseEvent) => {
-    if (e.target === editorBodyRef.current || (e.target as HTMLElement).id === 'noteslite-editorDoc' || (e.target as HTMLElement).className === 'noteslite-blocks-area') {
-      if (data.blocks.length > 0) {
-        setFocusIndex(data.blocks.length - 1);
-      }
+    if (!isEmptyEditorSpace(e.target as HTMLElement)) return;
+    if (data.blocks.length > 0) {
+      setFocusIndex(data.blocks.length - 1);
     }
   };
 
@@ -81,6 +92,52 @@ export default function CardEditor({ colName, cardTitle, cardData, setCardData, 
     input.click();
   };
 
+  const handleDocumentUpload = (index: number) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.md,.zip,.json,.rtf,.odt,.ods,.odp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv,text/markdown';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      if (file.size > 15 * 1024 * 1024) {
+        triggerToast('Warning: Large files might take a moment to process.');
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          updateBlockValue(index, JSON.stringify({
+            name: file.name,
+            type: file.type || '',
+            size: file.size,
+            url: event.target.result as string,
+          }));
+          triggerToast(`Attached: ${file.name}`);
+        }
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  };
+
+  const getDocIcon = (nameOrType: string): string => {
+    const s = (nameOrType || '').toLowerCase();
+    if (s.includes('pdf')) return '📕';
+    if (s.includes('sheet') || s.endsWith('.xls') || s.endsWith('.xlsx') || s.endsWith('.csv') || s.includes('excel')) return '📊';
+    if (s.includes('presentation') || s.endsWith('.ppt') || s.endsWith('.pptx') || s.includes('powerpoint')) return '📈';
+    if (s.includes('word') || s.endsWith('.doc') || s.endsWith('.docx') || s.endsWith('.rtf') || s.endsWith('.odt')) return '📝';
+    if (s.endsWith('.txt') || s.endsWith('.md') || s.startsWith('text/')) return '📄';
+    if (s.endsWith('.zip') || s.includes('zip') || s.includes('compressed')) return '🗜';
+    return '📎';
+  };
+
+  const formatBytes = (bytes: number): string => {
+    if (!bytes && bytes !== 0) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent, index: number) => {
     if (e.key === 'Enter') {
       if (e.shiftKey) {
@@ -95,7 +152,25 @@ export default function CardEditor({ colName, cardTitle, cardData, setCardData, 
       e.preventDefault();
       const newBlocks = [...data.blocks];
       newBlocks.splice(index, 1);
+
+      // After removing an empty line, jump the cursor back to the nearest
+      // previous line with text (preferred), else the nearest editable block,
+      // else the first block.
+      const editableTypes = ['p', 'h1', 'h2', 'h3', 'todo', 'bullet', 'numbered', 'quote', 'callout', 'code'];
+      const start = Math.min(index - 1, newBlocks.length - 1);
+      let focusAt = -1;
+      for (let i = start; i >= 0; i--) {
+        if (editableTypes.includes(newBlocks[i].t) && newBlocks[i].v) { focusAt = i; break; }
+      }
+      if (focusAt === -1) {
+        for (let i = start; i >= 0; i--) {
+          if (editableTypes.includes(newBlocks[i].t)) { focusAt = i; break; }
+        }
+      }
+      if (focusAt === -1) focusAt = 0;
+
       setCardData({ ...data, blocks: newBlocks });
+      setFocusIndex(focusAt);
       triggerToast('Block removed');
     }
     if (e.key === '/' && (e.target as HTMLElement).tagName === 'TEXTAREA') {
@@ -126,13 +201,24 @@ export default function CardEditor({ colName, cardTitle, cardData, setCardData, 
 
   useEffect(() => {
     if (focusIndex !== null && editorBodyRef.current) {
-      const blocks = editorBodyRef.current.querySelectorAll('textarea, input.noteslite-b-h1, input.noteslite-b-h2, input.noteslite-b-h3');
-      const target = blocks[focusIndex] as HTMLElement;
-      if (target) {
-        target.focus();
-        // For textareas, move cursor to end
-        if (target instanceof HTMLTextAreaElement) {
-          target.setSelectionRange(target.value.length, target.value.length);
+      // Scope the query to the blocks area so we don't accidentally pick up
+      // the card-title textarea (which would shift every index by 1).
+      const blocksArea = editorBodyRef.current.querySelector('.noteslite-blocks-area');
+      if (blocksArea) {
+        // Find the block-row at focusIndex, then its first editable element.
+        const rows = blocksArea.querySelectorAll(':scope > .noteslite-block-row');
+        const row = rows[focusIndex] as HTMLElement | undefined;
+        if (row) {
+          const target = row.querySelector('textarea, input[type="text"]:not([readonly]), input:not([type])') as HTMLElement | null;
+          if (target) {
+            target.focus();
+            if (target instanceof HTMLTextAreaElement) {
+              target.setSelectionRange(target.value.length, target.value.length);
+            } else if (target instanceof HTMLInputElement) {
+              const len = target.value.length;
+              try { target.setSelectionRange(len, len); } catch {}
+            }
+          }
         }
       }
       setFocusIndex(null);
@@ -186,6 +272,7 @@ export default function CardEditor({ colName, cardTitle, cardData, setCardData, 
         <button className="noteslite-fbtn" onClick={() => insertBlock('video')}>▶ Video</button>
         <button className="noteslite-fbtn" onClick={() => insertBlock('table')}>⊞ Table</button>
         <button className="noteslite-fbtn" onClick={() => insertBlock('link')}>🔗 Link</button>
+        <button className="noteslite-fbtn" onClick={() => insertBlock('document')}>📎 File</button>
         <div className="noteslite-fsep" />
         <button className="noteslite-fbtn" onClick={() => insertBlock('divider')}>— Divider</button>
       </div>
@@ -203,18 +290,33 @@ export default function CardEditor({ colName, cardTitle, cardData, setCardData, 
           e.preventDefault();
           if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
             const file = e.dataTransfer.files[0];
-            if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) return;
-            const type = file.type.startsWith('video/') ? 'video' : 'image';
-            if (file.size > 10 * 1024 * 1024) {
+            const isImage = file.type.startsWith('image/');
+            const isVideo = file.type.startsWith('video/');
+            if (file.size > 15 * 1024 * 1024) {
               triggerToast('Warning: Large files might take a moment to process.');
             }
             const reader = new FileReader();
             reader.onload = (event) => {
-              if (event.target?.result) {
-                const newBlocks = [...data.blocks];
+              if (!event.target?.result) return;
+              const newBlocks = [...data.blocks];
+              if (isImage || isVideo) {
+                const type = isVideo ? 'video' : 'image';
                 newBlocks.push({ t: type, v: event.target.result as string, done: false });
                 setCardData({ ...data, blocks: newBlocks });
                 triggerToast(`Imported ${type}`);
+              } else {
+                newBlocks.push({
+                  t: 'document',
+                  v: JSON.stringify({
+                    name: file.name,
+                    type: file.type || '',
+                    size: file.size,
+                    url: event.target.result as string,
+                  }),
+                  done: false,
+                });
+                setCardData({ ...data, blocks: newBlocks });
+                triggerToast(`Attached: ${file.name}`);
               }
             };
             reader.readAsDataURL(file);
@@ -428,6 +530,97 @@ export default function CardEditor({ colName, cardTitle, cardData, setCardData, 
                   </div>
                 );
               }
+              else if (b.t === 'document') {
+                let docData: { name: string; type: string; size: number; url: string } | null = null;
+                if (b.v) {
+                  try { docData = JSON.parse(b.v); } catch { docData = null; }
+                }
+                const icon = getDocIcon(docData?.name || docData?.type || '');
+                inner = (
+                  <div
+                    className="noteslite-b-document"
+                    onClick={() => { if (!docData) handleDocumentUpload(index); }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      padding: '12px 14px',
+                      margin: '4px 0',
+                      border: '1px solid var(--border)',
+                      borderRadius: '8px',
+                      background: 'var(--surface)',
+                      cursor: docData ? 'default' : 'pointer',
+                      minHeight: '54px',
+                    }}
+                  >
+                    {docData ? (
+                      <>
+                        <div style={{ fontSize: '28px', lineHeight: 1 }}>{icon}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{docData.name}</div>
+                          <div style={{ fontSize: '11px', color: 'var(--text3)' }}>
+                            {(docData.type || 'file').split('/').pop()}{docData.size ? ` · ${formatBytes(docData.size)}` : ''}
+                          </div>
+                        </div>
+                        <a
+                          href={docData.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            background: 'var(--surface)',
+                            border: '1px solid var(--border)',
+                            borderRadius: 4,
+                            padding: '4px 10px',
+                            fontSize: 11,
+                            color: 'var(--text)',
+                            textDecoration: 'none',
+                            cursor: 'pointer',
+                          }}
+                          title="Open in new tab"
+                        >Open</a>
+                        <a
+                          href={docData.url}
+                          download={docData.name}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            background: 'var(--surface)',
+                            border: '1px solid var(--border)',
+                            borderRadius: 4,
+                            padding: '4px 10px',
+                            fontSize: 11,
+                            color: 'var(--text)',
+                            textDecoration: 'none',
+                            cursor: 'pointer',
+                          }}
+                          title="Download"
+                        >↓</a>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDocumentUpload(index); }}
+                          style={{
+                            background: 'var(--surface)',
+                            border: '1px solid var(--border)',
+                            borderRadius: 4,
+                            padding: '4px 10px',
+                            fontSize: 11,
+                            color: 'var(--text3)',
+                            cursor: 'pointer',
+                          }}
+                          title="Replace file"
+                        >Replace</button>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ fontSize: '28px', lineHeight: 1 }}>📎</div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text)' }}>Click to upload a document</div>
+                          <div style={{ fontSize: '11px', color: 'var(--text3)' }}>PDF, Word, Excel, PowerPoint, CSV, TXT, ZIP…</div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              }
               else inner = <textarea className="noteslite-b-p" rows={1} onInput={handleTextareaInput} value={b.v} onChange={e => updateBlockValue(index, e.target.value)} onKeyDown={(e) => handleKeyDown(e, index)} />;
 
               return (
@@ -446,18 +639,33 @@ export default function CardEditor({ colName, cardTitle, cardData, setCardData, 
                     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
                       e.stopPropagation();
                       const file = e.dataTransfer.files[0];
-                      if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) return;
-                      const type = file.type.startsWith('video/') ? 'video' : 'image';
-                      if (file.size > 10 * 1024 * 1024) {
+                      const isImage = file.type.startsWith('image/');
+                      const isVideo = file.type.startsWith('video/');
+                      if (file.size > 15 * 1024 * 1024) {
                         triggerToast('Warning: Large files might take a moment to process.');
                       }
                       const reader = new FileReader();
                       reader.onload = (event) => {
-                        if (event.target?.result) {
-                          const newBlocks = [...data.blocks];
+                        if (!event.target?.result) return;
+                        const newBlocks = [...data.blocks];
+                        if (isImage || isVideo) {
+                          const type = isVideo ? 'video' : 'image';
                           newBlocks.splice(index, 0, { t: type, v: event.target.result as string, done: false });
                           setCardData({ ...data, blocks: newBlocks });
                           triggerToast(`Imported ${type}`);
+                        } else {
+                          newBlocks.splice(index, 0, {
+                            t: 'document',
+                            v: JSON.stringify({
+                              name: file.name,
+                              type: file.type || '',
+                              size: file.size,
+                              url: event.target.result as string,
+                            }),
+                            done: false,
+                          });
+                          setCardData({ ...data, blocks: newBlocks });
+                          triggerToast(`Attached: ${file.name}`);
                         }
                       };
                       reader.readAsDataURL(file);
@@ -533,6 +741,7 @@ export default function CardEditor({ colName, cardTitle, cardData, setCardData, 
                 { id: 'video', icon: '▶', label: 'Video', desc: 'Embed a video' },
                 { id: 'table', icon: '⊞', label: 'Table', desc: 'Structured data rows' },
                 { id: 'link', icon: '🔗', label: 'Link', desc: 'Bookmark a website' },
+                { id: 'document', icon: '📎', label: 'File / Document', desc: 'Upload a PDF, Excel, Word, etc.' },
                 { id: 'divider', icon: '—', label: 'Divider', desc: 'Horizontal separator' }
               ].map(item => (
                 <div key={item.id} className="noteslite-slash-item" onClick={() => insertBlock(item.id)}>
