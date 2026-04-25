@@ -2,6 +2,14 @@
 
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 
+export type ApiKeyItem = {
+  id: string;
+  name: string;
+  prefix: string;
+  lastUsedAt: string | null;
+  createdAt: string;
+};
+
 export type ProfileSettings = {
   avatarMode: "placeholder" | "url" | "initials";
   avatarUrl: string;
@@ -49,6 +57,18 @@ type ProfileModalProps = {
   
   isUpdating2FA?: boolean;
   onOpenPreferences?: () => void;
+
+  apiKeys?: ApiKeyItem[];
+  userPlan?: string;
+  apiKeyLimit?: number;
+  newKeyName?: string;
+  isCreatingKey?: boolean;
+  apiKeyError?: string | null;
+  createdKey?: string | null;
+  onNewKeyNameChange?: (name: string) => void;
+  onCreateKey?: () => void;
+  onRevokeKey?: (id: string) => void;
+  onDismissCreatedKey?: () => void;
 };
 
 const TIMEZONE_OPTIONS = [
@@ -112,6 +132,17 @@ export default function ProfileModal({
   onConfirmEmailOtp,
   isUpdating2FA = false,
   onOpenPreferences,
+  apiKeys = [],
+  userPlan = "basic",
+  apiKeyLimit = 1,
+  newKeyName = "",
+  isCreatingKey = false,
+  apiKeyError = null,
+  createdKey = null,
+  onNewKeyNameChange,
+  onCreateKey,
+  onRevokeKey,
+  onDismissCreatedKey,
 }: ProfileModalProps) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -137,6 +168,11 @@ export default function ProfileModal({
     const focusFrame = window.requestAnimationFrame(() => {
       closeBtnRef.current?.focus();
     });
+    return () => window.cancelAnimationFrame(focusFrame);
+  }, [isVisible]);
+
+  useEffect(() => {
+    if (!isVisible) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
@@ -172,7 +208,6 @@ export default function ProfileModal({
 
     document.addEventListener("keydown", handleKeyDown);
     return () => {
-      window.cancelAnimationFrame(focusFrame);
       document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", handleKeyDown);
     };
@@ -436,6 +471,67 @@ export default function ProfileModal({
         .pm-bg-empty-msg { font-size: 12px; color: var(--pm-ink-faint); display: flex; flex-direction: column; align-items: center; gap: 8px; }
         .pm-bg-empty-icon { font-size: 24px; }
         .pm-bg-actions { display: flex; gap: 8px; margin-top: 10px; }
+
+        .pm-plan-badge {
+          display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 600;
+          letter-spacing: 0.1em; text-transform: uppercase; padding: 4px 10px; border-radius: 20px; border: 0.5px solid;
+        }
+        .pm-plan-badge.basic { color: var(--pm-amber); background: var(--pm-amber-bg); border-color: rgba(133,79,11,0.25); }
+        .pm-plan-badge.pro { color: var(--pm-purple); background: var(--pm-purple-bg); border-color: rgba(83,74,183,0.25); }
+
+        .pm-key-row {
+          display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+          background: var(--pm-cream); border-radius: var(--pm-radius-sm); border: 0.5px solid var(--pm-border);
+        }
+        .pm-key-prefix {
+          font-family: monospace; font-size: 12px; font-weight: 600; color: var(--pm-ink);
+          background: var(--pm-cream-deep); border-radius: 5px; padding: 2px 7px; letter-spacing: 0.04em; flex-shrink: 0;
+        }
+        .pm-key-meta { flex: 1; min-width: 0; }
+        .pm-key-name { font-size: 12.5px; font-weight: 500; color: var(--pm-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .pm-key-used { font-size: 11px; color: var(--pm-ink-faint); margin-top: 1px; }
+        .pm-btn-revoke {
+          font-size: 10px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase;
+          padding: 5px 10px; border-radius: 6px; border: 0.5px solid rgba(163,45,45,0.3);
+          background: var(--pm-red-bg); color: var(--pm-red); cursor: pointer; transition: all 0.15s;
+          white-space: nowrap; flex-shrink: 0; font-family: 'DM Sans', sans-serif; outline: none;
+        }
+        .pm-btn-revoke:hover { background: #f7c1c1; }
+
+        .pm-key-empty { font-size: 12.5px; color: var(--pm-ink-faint); padding: 10px 0; text-align: center; }
+
+        .pm-new-key-banner {
+          border-radius: var(--pm-radius-sm); border: 0.5px solid rgba(15,110,86,0.25);
+          background: var(--pm-teal-bg); padding: 12px;
+        }
+        .pm-new-key-label { font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--pm-teal); margin-bottom: 6px; }
+        .pm-new-key-warn { font-size: 11.5px; color: var(--pm-teal); margin-bottom: 8px; opacity: 0.85; }
+        .pm-new-key-row { display: flex; gap: 8px; align-items: center; }
+        .pm-key-value {
+          flex: 1; font-family: monospace; font-size: 11.5px; color: var(--pm-ink);
+          background: white; border: 0.5px solid rgba(15,110,86,0.3); border-radius: 6px;
+          padding: 8px 10px; letter-spacing: 0.03em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .pm-btn-copy {
+          font-size: 10px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase;
+          padding: 8px 12px; border-radius: 6px; border: 0.5px solid rgba(15,110,86,0.3);
+          background: var(--pm-teal); color: white; cursor: pointer; transition: all 0.15s;
+          white-space: nowrap; flex-shrink: 0; font-family: 'DM Sans', sans-serif; outline: none;
+        }
+        .pm-btn-copy:hover { background: #0a5a46; }
+        .pm-btn-dismiss {
+          font-size: 10px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase;
+          padding: 6px 10px; border-radius: 6px; border: 0.5px solid var(--pm-border-strong);
+          background: transparent; color: var(--pm-ink-muted); cursor: pointer; transition: all 0.15s;
+          margin-top: 8px; width: 100%; font-family: 'DM Sans', sans-serif; outline: none;
+        }
+        .pm-btn-dismiss:hover { background: var(--pm-cream-deep); }
+
+        .pm-limit-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+        .pm-limit-pips { display: flex; gap: 4px; }
+        .pm-limit-pip { width: 20px; height: 4px; border-radius: 2px; background: var(--pm-cream-deep); }
+        .pm-limit-pip.filled { background: var(--pm-purple); }
+        .pm-limit-text { font-size: 11px; color: var(--pm-ink-faint); }
       `}</style>
       
       <div className={`pm-root pm-backdrop ${isVisible ? 'pm-show' : ''}`} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -694,6 +790,116 @@ export default function ProfileModal({
                   </div>
                 </div>
 
+              </div>
+            </div>
+
+            <div className="pm-section">
+              <div className="pm-section-header">
+                <div className="pm-section-meta">
+                  <span className="pm-section-label">Developer</span>
+                  <h2 className="pm-section-title">API access</h2>
+                </div>
+                <span className="pm-section-count">{apiKeys.length} / {apiKeyLimit} keys</span>
+              </div>
+
+              <div className="pm-card" style={{ gap: 14 }}>
+                <div className="pm-card-head">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span className="pm-card-badge">API Keys</span>
+                    <span className={`pm-plan-badge ${userPlan}`}>{userPlan}</span>
+                  </div>
+                  <h3 className="pm-card-title">Automation credentials</h3>
+                  <p className="pm-card-desc">
+                    Use API keys to connect Noteslite to agents, automations, or external tools.
+                    Pass them as <code style={{ fontSize: '11px', background: 'var(--pm-cream-deep)', padding: '1px 5px', borderRadius: 4 }}>Authorization: Bearer &lt;key&gt;</code> in your requests.
+                  </p>
+                </div>
+
+                <div>
+                  <div className="pm-limit-bar">
+                    <div className="pm-limit-pips">
+                      {Array.from({ length: apiKeyLimit }).map((_, i) => (
+                        <div key={i} className={`pm-limit-pip ${i < apiKeys.length ? 'filled' : ''}`} />
+                      ))}
+                    </div>
+                    <span className="pm-limit-text">{apiKeys.length} of {apiKeyLimit} key{apiKeyLimit !== 1 ? 's' : ''} used</span>
+                  </div>
+
+                  {apiKeys.length === 0 ? (
+                    <div className="pm-key-empty">No active API keys yet.</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {apiKeys.map((k) => (
+                        <div key={k.id} className="pm-key-row">
+                          <span className="pm-key-prefix">{k.prefix}…</span>
+                          <div className="pm-key-meta">
+                            <div className="pm-key-name">{k.name}</div>
+                            <div className="pm-key-used">
+                              {k.lastUsedAt
+                                ? `Last used ${new Date(k.lastUsedAt).toLocaleDateString()}`
+                                : `Created ${new Date(k.createdAt).toLocaleDateString()} · Never used`}
+                            </div>
+                          </div>
+                          <button className="pm-btn-revoke" onClick={() => onRevokeKey?.(k.id)}>
+                            Revoke
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {createdKey ? (
+                  <div className="pm-new-key-banner">
+                    <div className="pm-new-key-label">New key generated</div>
+                    <div className="pm-new-key-warn">Copy it now — this is the only time it will be shown.</div>
+                    <div className="pm-new-key-row">
+                      <div className="pm-key-value">{createdKey}</div>
+                      <button
+                        className="pm-btn-copy"
+                        onClick={() => {
+                          navigator.clipboard.writeText(createdKey).catch(() => {});
+                        }}
+                      >
+                        Copy
+                      </button>
+                    </div>
+                    <button className="pm-btn-dismiss" onClick={onDismissCreatedKey}>
+                      I've saved it — dismiss
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="pm-field-label" style={{ marginBottom: 6 }}>New key label</div>
+                    <div className="pm-url-row">
+                      <input
+                        type="text"
+                        className="pm-input"
+                        placeholder="e.g. My Claude Agent"
+                        maxLength={60}
+                        value={newKeyName}
+                        onChange={(e) => onNewKeyNameChange?.(e.target.value)}
+                        disabled={apiKeys.length >= apiKeyLimit}
+                      />
+                      <button
+                        className="pm-btn pm-btn-primary"
+                        onClick={onCreateKey}
+                        disabled={!newKeyName.trim() || isCreatingKey || apiKeys.length >= apiKeyLimit}
+                        style={{ whiteSpace: 'nowrap' }}
+                      >
+                        {isCreatingKey ? 'Generating…' : 'Generate'}
+                      </button>
+                    </div>
+                    {apiKeys.length >= apiKeyLimit && (
+                      <div style={{ fontSize: 11, color: 'var(--pm-amber)', marginTop: 6 }}>
+                        Limit reached for {userPlan} plan. Revoke a key or upgrade to add more.
+                      </div>
+                    )}
+                    {apiKeyError && (
+                      <div style={{ fontSize: 11, color: 'var(--pm-red)', marginTop: 6 }}>{apiKeyError}</div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 

@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import LoadingScreen from "@/components/loading-screen";
 import ProfileModal, {
+  type ApiKeyItem,
   type PasswordForm,
   type ProfileSettings,
 } from "@/components/profile-modal";
@@ -298,6 +299,15 @@ export default function DashboardClient({
   
   const [isPreferencesMounted, setIsPreferencesMounted] = useState(false);
   const [isPreferencesVisible, setIsPreferencesVisible] = useState(false);
+
+  const [apiKeys, setApiKeys] = useState<ApiKeyItem[]>([]);
+  const [userPlan, setUserPlan] = useState("basic");
+  const [apiKeyLimit, setApiKeyLimit] = useState(1);
+  const [newKeyName, setNewKeyName] = useState("");
+  const [isCreatingKey, setIsCreatingKey] = useState(false);
+  const [apiKeyError, setApiKeyError] = useState<string | null>(null);
+  const [createdKey, setCreatedKey] = useState<string | null>(null);
+
   const profileInitials = useMemo(() => getProfileInitials(userName), [userName]);
   const user = session?.user;
   const userEmail = user?.email ?? "";
@@ -326,9 +336,59 @@ export default function DashboardClient({
     [workspaces, editingId],
   );
 
+  const loadApiKeys = useCallback(async () => {
+    try {
+      const res = await fetch("/api/api-keys");
+      if (!res.ok) return;
+      const data = await res.json() as { keys: ApiKeyItem[]; plan: string; limit: number };
+      setApiKeys(data.keys);
+      setUserPlan(data.plan);
+      setApiKeyLimit(data.limit);
+    } catch {
+      // silently ignore
+    }
+  }, []);
+
+  const createApiKey = useCallback(async () => {
+    if (!newKeyName.trim()) return;
+    setIsCreatingKey(true);
+    setApiKeyError(null);
+    try {
+      const res = await fetch("/api/api-keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newKeyName.trim() }),
+      });
+      const data = await res.json() as { key?: string; id?: string; name?: string; prefix?: string; createdAt?: string; error?: string };
+      if (!res.ok) {
+        setApiKeyError(data.error ?? "Failed to create key.");
+        return;
+      }
+      setCreatedKey(data.key ?? null);
+      setNewKeyName("");
+      await loadApiKeys();
+    } catch {
+      setApiKeyError("Failed to create key.");
+    } finally {
+      setIsCreatingKey(false);
+    }
+  }, [newKeyName, loadApiKeys]);
+
+  const revokeApiKey = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`/api/api-keys/${id}`, { method: "DELETE" });
+      if (!res.ok) return;
+      setApiKeys((prev) => prev.filter((k) => k.id !== id));
+    } catch {
+      // silently ignore
+    }
+  }, []);
+
   const openProfileModal = useCallback(() => {
     setPasswordError(null);
     setPasswordSuccess(null);
+    setApiKeyError(null);
+    setCreatedKey(null);
 
     if (profileCloseTimerRef.current !== null) {
       window.clearTimeout(profileCloseTimerRef.current);
@@ -337,7 +397,8 @@ export default function DashboardClient({
 
     setIsProfileMounted(true);
     window.requestAnimationFrame(() => setIsProfileVisible(true));
-  }, []);
+    void loadApiKeys();
+  }, [loadApiKeys]);
 
   const closeProfileModal = useCallback(() => {
     setIsProfileVisible(false);
@@ -1166,6 +1227,17 @@ export default function DashboardClient({
           onSavePassword={savePasswordChange}
           isPasswordLoading={isPasswordLoading}
           onOpenPreferences={openPreferencesModal}
+          apiKeys={apiKeys}
+          userPlan={userPlan}
+          apiKeyLimit={apiKeyLimit}
+          newKeyName={newKeyName}
+          isCreatingKey={isCreatingKey}
+          apiKeyError={apiKeyError}
+          createdKey={createdKey}
+          onNewKeyNameChange={setNewKeyName}
+          onCreateKey={() => void createApiKey()}
+          onRevokeKey={(id) => void revokeApiKey(id)}
+          onDismissCreatedKey={() => setCreatedKey(null)}
         />
       ) : null}
 

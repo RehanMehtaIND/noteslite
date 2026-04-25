@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getAuthUser } from "@/lib/api-key-auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
-export async function GET() {
-  const user = await getCurrentUser();
+export async function GET(req: Request) {
+  const user = await getAuthUser(req);
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -30,7 +30,7 @@ const createNoteSchema = z.object({
 });
 
 export async function POST(req: Request) {
-  const user = await getCurrentUser();
+  const user = await getAuthUser(req);
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

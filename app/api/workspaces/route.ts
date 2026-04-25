@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getCurrentUser } from "@/lib/auth";
+import { getAuthUser } from "@/lib/api-key-auth";
 import { prisma } from "@/lib/prisma";
 
 const createWorkspaceSchema = z.object({
@@ -9,8 +9,8 @@ const createWorkspaceSchema = z.object({
   theme: z.string().trim().max(2048).optional(),
 });
 
-export async function GET() {
-  const user = await getCurrentUser();
+export async function GET(req: Request) {
+  const user = await getAuthUser(req);
 
   if (!user) {
     return NextResponse.json({ error: "Unauthenticated." }, { status: 401 });
@@ -28,7 +28,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const user = await getCurrentUser();
+  const user = await getAuthUser(req);
 
   if (!user) {
     return NextResponse.json({ error: "Unauthenticated." }, { status: 401 });

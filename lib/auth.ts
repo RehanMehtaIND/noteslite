@@ -150,8 +150,8 @@ export const authOptions: NextAuthOptions = {
           const os = parser.getOS();
           const browser = parser.getBrowser();
 
-          const deviceName = device.vendor && device.model 
-            ? `${device.vendor} ${device.model}` 
+          const deviceName = device.vendor && device.model
+            ? `${device.vendor} ${device.model}`
             : `${os.name || "Unknown"} Device`;
 
           const browserName = `${browser.name || "Unknown"} ${browser.version || ""}`.trim();

@@ -31,10 +31,12 @@ model User {
   showEmail         Boolean     @default(false) @map("show_email")
   theme             String?     @default("standard")
   dashboardBackground String?   @map("dashboard_background")
+  plan              String      @default("basic")
 
   sessions          Session[]
   quickNotes        QuickNote[]
   workspaces        Workspace[]
+  apiKeys           ApiKey[]
 
   @@map("users")
 }
@@ -141,6 +143,23 @@ model Connection {
   @@index([sourceCardId])
   @@index([targetCardId])
   @@map("connections")
+}
+
+// ─── API Keys ────────────────────────────────────────────────────────────────
+
+model ApiKey {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  keyHash    String    @unique @map("key_hash")
+  prefix     String
+  lastUsedAt DateTime? @map("last_used_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  isActive   Boolean   @default(true) @map("is_active")
+
+  @@index([userId])
+  @@map("api_keys")
 }
 
 // ─── Quick Notes ─────────────────────────────────────────────────────────────

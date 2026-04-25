@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
-import ProfileModal, { type ProfileSettings, type PasswordForm } from "./profile-modal";
+import ProfileModal, { type ProfileSettings, type PasswordForm, type ApiKeyItem } from "./profile-modal";
 import PreferencesModal from "./preferences-modal";
 import QuickNotesView, { type QuickNote } from "./quick-notes";
 import LoadingScreen from "./loading-screen";
@@ -333,6 +333,15 @@ export default function DashboardPolished() {
   const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
 
+  // API Keys state
+  const [apiKeys, setApiKeys] = useState<ApiKeyItem[]>([]);
+  const [userPlan, setUserPlan] = useState("basic");
+  const [apiKeyLimit, setApiKeyLimit] = useState(1);
+  const [newKeyName, setNewKeyName] = useState("");
+  const [isCreatingKey, setIsCreatingKey] = useState(false);
+  const [apiKeyError, setApiKeyError] = useState<string | null>(null);
+  const [createdKey, setCreatedKey] = useState<string | null>(null);
+
   useEffect(() => {
     if (session?.user?.email) {
       setProfileSettings((prev) => ({
@@ -387,7 +396,55 @@ export default function DashboardPolished() {
     };
   }, [status]);
 
-  async function handleUpdateProfile(updates: Partial<ProfileSettings>) {
+  const loadApiKeys = useCallback(async () => {
+    try {
+      const res = await fetch("/api/api-keys");
+      if (!res.ok) return;
+      const data = await res.json() as { keys: ApiKeyItem[]; plan: string; limit: number };
+      setApiKeys(data.keys);
+      setUserPlan(data.plan);
+      setApiKeyLimit(data.limit);
+    } catch {
+      // silently ignore
+    }
+  }, []);
+
+  const handleCreateApiKey = useCallback(async () => {
+    if (!newKeyName.trim()) return;
+    setIsCreatingKey(true);
+    setApiKeyError(null);
+    try {
+      const res = await fetch("/api/api-keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newKeyName.trim() }),
+      });
+      const data = await res.json() as { key?: string; id?: string; name?: string; prefix?: string; createdAt?: string; error?: string };
+      if (!res.ok) {
+        setApiKeyError(data.error ?? "Failed to create key.");
+        return;
+      }
+      setCreatedKey(data.key ?? null);
+      setNewKeyName("");
+      await loadApiKeys();
+    } catch {
+      setApiKeyError("Failed to create key.");
+    } finally {
+      setIsCreatingKey(false);
+    }
+  }, [newKeyName, loadApiKeys]);
+
+  const handleRevokeApiKey = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`/api/api-keys/${id}`, { method: "DELETE" });
+      if (!res.ok) return;
+      setApiKeys((prev) => prev.filter((k) => k.id !== id));
+    } catch {
+      // silently ignore
+    }
+  }, []);
+
+  const handleUpdateProfile = useCallback(async (updates: Partial<ProfileSettings>) => {
     if ("twoFactorEnabled" in updates || "twoFactorMethod" in updates) {
       setIsUpdating2FA(true);
       try {
@@ -450,15 +507,15 @@ export default function DashboardPolished() {
 
       setToast("Profile setting updated");
     }
-  }
+  }, [profileSettings.twoFactorEnabled, profileSettings.twoFactorMethod]);
 
-  function handleUpdatePassword(field: keyof PasswordForm, value: string) {
+  const handleUpdatePassword = useCallback((field: keyof PasswordForm, value: string) => {
     setPasswordForm((prev) => ({ ...prev, [field]: value }));
     setPasswordError(null);
     setPasswordSuccess(null);
-  }
+  }, []);
 
-  async function handleSavePassword() {
+  const handleSavePassword = useCallback(async () => {
     if (!passwordForm.currentPassword) {
       setPasswordError("Current password is required");
       return;
@@ -504,9 +561,9 @@ export default function DashboardPolished() {
     } finally {
       setIsPasswordLoading(false);
     }
-  }
+  }, [passwordForm]);
 
-  async function handleSendEmailOtp() {
+  const handleSendEmailOtp = useCallback(async () => {
     setIsEmailVerifying(true);
     setEmailVerifyError(null);
     try {
@@ -528,9 +585,9 @@ export default function DashboardPolished() {
     } finally {
       setIsEmailVerifying(false);
     }
-  }
+  }, []);
 
-  async function handleConfirmEmailOtp() {
+  const handleConfirmEmailOtp = useCallback(async () => {
     if (emailOtpForm.length !== 6) return;
 
     setIsEmailVerifying(true);
@@ -562,7 +619,12 @@ export default function DashboardPolished() {
     } finally {
       setIsEmailVerifying(false);
     }
-  }
+  }, [emailOtpForm]);
+
+  const handleCloseProfileModal = useCallback(() => setProfileModalVisible(false), []);
+  const handleLogout = useCallback(() => signOut({ callbackUrl: "/auth/sign-in" }), []);
+  const handleOpenPreferencesModal = useCallback(() => setPreferencesModalVisible(true), []);
+  const handleDismissCreatedKey = useCallback(() => setCreatedKey(null), []);
 
   const profileWrapRef = useRef<HTMLDivElement | null>(null);
   const devicePanelRef = useRef<HTMLDivElement | null>(null);
@@ -1205,7 +1267,7 @@ export default function DashboardPolished() {
                     </div>
                   </div>
                   <div className="pd-section">
-                    <button className="pd-item" type="button" onClick={() => { setProfileModalVisible(true); setProfileOpen(false); }}>
+                    <button className="pd-item" type="button" onClick={() => { setProfileModalVisible(true); setProfileOpen(false); loadApiKeys(); }}>
                       <div className="pd-item-icon">👤</div>
                       Profile Settings
                     </button>
@@ -3197,8 +3259,8 @@ export default function DashboardPolished() {
         passwordForm={passwordForm}
         passwordError={passwordError}
         passwordSuccess={passwordSuccess}
-        onClose={() => setProfileModalVisible(false)}
-        onLogout={() => signOut({ callbackUrl: "/auth/sign-in" })}
+        onClose={handleCloseProfileModal}
+        onLogout={handleLogout}
         onUpdateProfile={handleUpdateProfile}
         onUpdatePassword={handleUpdatePassword}
         onSavePassword={handleSavePassword}
@@ -3211,7 +3273,18 @@ export default function DashboardPolished() {
         onSendEmailOtp={handleSendEmailOtp}
         onConfirmEmailOtp={handleConfirmEmailOtp}
         isUpdating2FA={isUpdating2FA}
-        onOpenPreferences={() => setPreferencesModalVisible(true)}
+        onOpenPreferences={handleOpenPreferencesModal}
+        apiKeys={apiKeys}
+        userPlan={userPlan}
+        apiKeyLimit={apiKeyLimit}
+        newKeyName={newKeyName}
+        isCreatingKey={isCreatingKey}
+        apiKeyError={apiKeyError}
+        createdKey={createdKey}
+        onNewKeyNameChange={setNewKeyName}
+        onCreateKey={handleCreateApiKey}
+        onRevokeKey={handleRevokeApiKey}
+        onDismissCreatedKey={handleDismissCreatedKey}
       />
 
       {preferencesModalVisible ? (
