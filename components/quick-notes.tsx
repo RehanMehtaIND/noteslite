@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import EmojiIcon from "./emoji-icon";
 
 export type QuickNote = {
   id: string;
@@ -258,7 +259,7 @@ export default function QuickNotesView({ notes, onCreateNote, onUpdateNote, onDe
 
       {filtered.length === 0 ? (
         <div className="qnv-empty">
-          <div className="qnv-empty-icon">📝</div>
+          <EmojiIcon className="qnv-empty-icon" emoji="📝" label="Note" />
           <div className="qnv-empty-txt">{notes.length === 0 ? "No quick notes yet. Click + to create one!" : "No notes match your search or filter."}</div>
         </div>
       ) : (
@@ -284,7 +285,10 @@ export default function QuickNotesView({ notes, onCreateNote, onUpdateNote, onDe
                 {note.description && <div className="qnv-card-desc">{note.description}</div>}
                 <div className="qnv-card-footer">
                   {note.pinned && (
-                    <span className="qnv-card-pin-badge" style={{ background: `${note.color}18`, color: note.color }}>📌 Pinned</span>
+                    <span className="qnv-card-pin-badge" style={{ background: `${note.color}18`, color: note.color }}>
+                      <EmojiIcon emoji="📌" label="Pinned" />
+                      Pinned
+                    </span>
                   )}
                   <div className="qnv-card-time">{new Date(note.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
                 </div>
@@ -301,9 +305,18 @@ export default function QuickNotesView({ notes, onCreateNote, onUpdateNote, onDe
           <>
             <div className="qnv-menu-backdrop" onClick={closeMenu} />
             <div className="qnv-menu" style={{ top: menuPos.top, left: menuPos.left }}>
-              <button className="qnv-menu-item" onClick={() => handleTogglePin(note.id, note.pinned)}>{note.pinned ? "📌 Unpin" : "📌 Pin"}</button>
-              <button className="qnv-menu-item" onClick={() => startEdit(note)}>✏️ Edit</button>
-              <button className="qnv-menu-item danger" onClick={() => handleDelete(note.id)}>🗑️ Delete</button>
+              <button className="qnv-menu-item" onClick={() => handleTogglePin(note.id, note.pinned)}>
+                <EmojiIcon emoji="📌" label="Pin" />
+                {note.pinned ? "Unpin" : "Pin"}
+              </button>
+              <button className="qnv-menu-item" onClick={() => startEdit(note)}>
+                <EmojiIcon emoji="✏️" label="Edit" />
+                Edit
+              </button>
+              <button className="qnv-menu-item danger" onClick={() => handleDelete(note.id)}>
+                <EmojiIcon emoji="🗑️" label="Delete" />
+                Delete
+              </button>
               <div className="qnv-menu-colors">
                 {allColors.map((c) => (
                   <div key={c.id} className={`qnv-menu-cdot ${note.color === c.hex ? "sel" : ""}`} style={{ background: c.hex }} onClick={() => handleChangeColor(note.id, c.hex)} title={c.label} />
@@ -323,7 +336,12 @@ export default function QuickNotesView({ notes, onCreateNote, onUpdateNote, onDe
             <div className="qnv-popup-title">{viewNote.title}</div>
             <div className="qnv-popup-desc">{viewNote.description || "No description."}</div>
             <div className="qnv-popup-meta">
-              <span>{viewNote.pinned ? "📌 Pinned" : ""}</span>
+              {viewNote.pinned ? (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  <EmojiIcon emoji="📌" label="Pinned" />
+                  Pinned
+                </span>
+              ) : null}
               <span>{new Date(viewNote.createdAt).toLocaleString()}</span>
             </div>
           </div>

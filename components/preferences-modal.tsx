@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import EmojiIcon from "./emoji-icon";
 import { type ProfileSettings } from "./profile-modal";
 
 type PreferencesModalProps = {
@@ -213,7 +214,7 @@ export default function PreferencesModal({ isVisible, profile, onClose, onUpdate
                       <img src={profile.dashboardBackground} className="pm-bg-preview-img" alt="Dashboard background" />
                     ) : (
                       <div className="flex flex-col items-center gap-2 text-[#A09D98]">
-                        <span className="text-3xl">🖼️</span>
+                        <EmojiIcon className="text-3xl" emoji="🖼️" label="Image" />
                         <span className="text-sm">No background selected</span>
                       </div>
                     )}
