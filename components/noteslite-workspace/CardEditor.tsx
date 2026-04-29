@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import EmojiIcon, { getEmojiAssetName } from '@/components/emoji-icon';
 import { INITIAL_CARD_DATA } from './data';
 
 interface CardEditorProps {
@@ -199,6 +200,18 @@ export default function CardEditor({ colName, cardTitle, cardData, setCardData, 
     setCardData({ ...data, blocks: newBlocks });
   };
 
+  // Resize every textarea after every render: fixes initial load (multi-line Shift+Enter content)
+  // AND reorder moves (drag-and-drop swaps value props but leaves old style.height on DOM nodes).
+  useEffect(() => {
+    const area = editorBodyRef.current?.querySelector('.noteslite-blocks-area');
+    if (!area) return;
+    area.querySelectorAll('textarea').forEach((ta) => {
+      const textarea = ta as HTMLTextAreaElement;
+      textarea.style.height = 'auto';
+      textarea.style.height = textarea.scrollHeight + 'px';
+    });
+  }); // intentionally no deps — must run after every render
+
   useEffect(() => {
     if (focusIndex !== null && editorBodyRef.current) {
       // Scope the query to the blocks area so we don't accidentally pick up
@@ -239,8 +252,12 @@ export default function CardEditor({ colName, cardTitle, cardData, setCardData, 
           <span className="cur" id="noteslite-bcCard">{data.title || (data.blocks && data.blocks[0]?.v) || "Untitled"}</span>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
-          <button className="noteslite-tbtn" onClick={() => triggerToast('Card saved ✓')}>💾 Save</button>
-          <button className="noteslite-tbtn" onClick={() => handleDeleteCard(cardTitle)} style={{ color: '#A04040' }}>🗑 Delete</button>
+          <button className="noteslite-tbtn" onClick={() => triggerToast('Card saved ✓')}>
+            <EmojiIcon emoji="💾" label="Save" /> Save
+          </button>
+          <button className="noteslite-tbtn" onClick={() => handleDeleteCard(cardTitle)} style={{ color: '#A04040' }}>
+            <EmojiIcon emoji="🗑" label="Delete" /> Delete
+          </button>
           <button className="noteslite-tbtn" onClick={() => {
             if (editorBodyRef.current) {
               const rect = editorBodyRef.current.getBoundingClientRect();
@@ -260,19 +277,19 @@ export default function CardEditor({ colName, cardTitle, cardData, setCardData, 
         <button className="noteslite-fbtn" onClick={() => insertBlock('h2')}>H2</button>
         <button className="noteslite-fbtn" onClick={() => insertBlock('h3')}>H3</button>
         <div className="noteslite-fsep" />
-        <button className="noteslite-fbtn" onClick={() => insertBlock('todo')}>☑ To-do</button>
+        <button className="noteslite-fbtn" onClick={() => insertBlock('todo')}><EmojiIcon emoji="☑" label="To-do" /> To-do</button>
         <button className="noteslite-fbtn" onClick={() => insertBlock('bullet')}>• List</button>
         <button className="noteslite-fbtn" onClick={() => insertBlock('numbered')}>1. List</button>
         <div className="noteslite-fsep" />
         <button className="noteslite-fbtn" onClick={() => insertBlock('quote')}>" Quote</button>
-        <button className="noteslite-fbtn" onClick={() => insertBlock('callout')}>💡 Callout</button>
-        <button className="noteslite-fbtn" onClick={() => insertBlock('code')}>⌨ Code</button>
+        <button className="noteslite-fbtn" onClick={() => insertBlock('callout')}><EmojiIcon emoji="💡" label="Callout" /> Callout</button>
+        <button className="noteslite-fbtn" onClick={() => insertBlock('code')}><EmojiIcon emoji="⌨" label="Code" /> Code</button>
         <div className="noteslite-fsep" />
-        <button className="noteslite-fbtn" onClick={() => insertBlock('image')}>🖼 Image</button>
-        <button className="noteslite-fbtn" onClick={() => insertBlock('video')}>▶ Video</button>
+        <button className="noteslite-fbtn" onClick={() => insertBlock('image')}><EmojiIcon emoji="🖼" label="Image" /> Image</button>
+        <button className="noteslite-fbtn" onClick={() => insertBlock('video')}><EmojiIcon emoji="▶" label="Video" /> Video</button>
         <button className="noteslite-fbtn" onClick={() => insertBlock('table')}>⊞ Table</button>
-        <button className="noteslite-fbtn" onClick={() => insertBlock('link')}>🔗 Link</button>
-        <button className="noteslite-fbtn" onClick={() => insertBlock('document')}>📎 File</button>
+        <button className="noteslite-fbtn" onClick={() => insertBlock('link')}><EmojiIcon emoji="🔗" label="Link" /> Link</button>
+        <button className="noteslite-fbtn" onClick={() => insertBlock('document')}><EmojiIcon emoji="📎" label="File" /> File</button>
         <div className="noteslite-fsep" />
         <button className="noteslite-fbtn" onClick={() => insertBlock('divider')}>— Divider</button>
       </div>
@@ -324,10 +341,12 @@ export default function CardEditor({ colName, cardTitle, cardData, setCardData, 
         }}
       >
         <div className="noteslite-card-cover-area" style={{ '--cover-a': data.coverA, '--cover-b': data.coverB } as React.CSSProperties}>
-          <button className="noteslite-cover-change-btn" onClick={() => triggerToast('Cover picker coming soon')}>🎨 Change cover</button>
+          <button className="noteslite-cover-change-btn" onClick={() => triggerToast('Cover picker coming soon')}>
+            <EmojiIcon emoji="🎨" label="Cover" /> Change cover
+          </button>
         </div>
         <div className="noteslite-editor-doc" id="noteslite-editorDoc">
-          <div className="noteslite-cover-emoji">{data.icon}</div>
+          <EmojiIcon className="noteslite-cover-emoji" emoji={data.icon} label="Card icon" />
           <textarea className="noteslite-card-title-input" rows={1} defaultValue={data.title || data.blocks?.find((b: any) => ['p', 'h1', 'h2', 'h3'].includes(b.t) && b.v)?.v || "Untitled"} placeholder="Untitled" onInput={handleTextareaInput} onChange={e => setCardData({ ...data, title: e.target.value })} />
           <div className="noteslite-card-meta">
             {data.tags.map((t: any, i: number) => (
@@ -375,7 +394,7 @@ export default function CardEditor({ colName, cardTitle, cardData, setCardData, 
               );
               else if (b.t === 'callout') inner = (
                 <div className="noteslite-b-callout">
-                  <div className="noteslite-b-callout-emoji">💡</div>
+                  <EmojiIcon className="noteslite-b-callout-emoji" emoji="💡" label="Callout" />
                   <textarea className="noteslite-b-callout-text" rows={2} onInput={handleTextareaInput} value={b.v} onChange={e => updateBlockValue(index, e.target.value)} />
                 </div>
               );
@@ -425,7 +444,7 @@ export default function CardEditor({ colName, cardTitle, cardData, setCardData, 
                       <button onClick={(e) => { e.stopPropagation(); handleFileUpload(index, 'image/*'); }} style={{position: 'absolute', top: 8, right: 8, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 8px', fontSize: 10, cursor: 'pointer', color: 'var(--text)'}}>Change Image</button>
                     </div>
                   ) : <>
-                    <div style={{ fontSize: '28px' }}>🖼</div>
+                    <EmojiIcon emoji="🖼" label="Image" style={{ fontSize: '28px' }} />
                     <div className="noteslite-b-image-placeholder">Click to upload image</div>
                     <div style={{ fontSize: '11px', color: 'var(--text3)' }}>Supports JPG, PNG, GIF, WebP</div>
                   </>}
@@ -447,7 +466,7 @@ export default function CardEditor({ colName, cardTitle, cardData, setCardData, 
                       <button onClick={(e) => { e.stopPropagation(); handleFileUpload(index, 'video/*'); }} style={{position: 'absolute', top: 8, right: 8, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 8px', fontSize: 10, cursor: 'pointer', color: 'var(--text)'}}>Change Video</button>
                     </div>
                   ) : <>
-                    <div className="noteslite-b-video-play">▶</div>
+                    <EmojiIcon className="noteslite-b-video-play" emoji="▶" label="Play" />
                     <div className="noteslite-b-video-label">Click to upload video</div>
                   </>}
                 </div>
@@ -519,13 +538,15 @@ export default function CardEditor({ colName, cardTitle, cardData, setCardData, 
                        window.open(linkData.url, '_blank');
                     }
                   }}>
-                    <div className="noteslite-b-link-thumb">🌐</div>
+                    <EmojiIcon className="noteslite-b-link-thumb" emoji="🌐" label="Link" />
                     <div className="noteslite-b-link-info">
                       <div className="noteslite-b-link-title">{linkData.title || 'Click to add link'}</div>
                       <div className="noteslite-b-link-url">{linkData.url || ''}</div>
                     </div>
                     {b.v && (
-                      <button onClick={(e) => { e.stopPropagation(); const url = prompt("Edit URL:", linkData.url); if (url !== null) { const title = prompt("Edit title:", linkData.title) || url; updateBlockValue(index, JSON.stringify({ url, title })); } }} style={{background: 'none', border: 'none', cursor: 'pointer', padding: '0 12px', color: 'var(--text3)'}}>✎</button>
+                      <button onClick={(e) => { e.stopPropagation(); const url = prompt("Edit URL:", linkData.url); if (url !== null) { const title = prompt("Edit title:", linkData.title) || url; updateBlockValue(index, JSON.stringify({ url, title })); } }} style={{background: 'none', border: 'none', cursor: 'pointer', padding: '0 12px', color: 'var(--text3)'}}>
+                        <EmojiIcon emoji="✎" label="Edit link" />
+                      </button>
                     )}
                   </div>
                 );
@@ -555,7 +576,7 @@ export default function CardEditor({ colName, cardTitle, cardData, setCardData, 
                   >
                     {docData ? (
                       <>
-                        <div style={{ fontSize: '28px', lineHeight: 1 }}>{icon}</div>
+                        <EmojiIcon emoji={icon} label="Document type" style={{ fontSize: '28px' }} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{docData.name}</div>
                           <div style={{ fontSize: '11px', color: 'var(--text3)' }}>
@@ -611,7 +632,7 @@ export default function CardEditor({ colName, cardTitle, cardData, setCardData, 
                       </>
                     ) : (
                       <>
-                        <div style={{ fontSize: '28px', lineHeight: 1 }}>📎</div>
+                        <EmojiIcon emoji="📎" label="File" style={{ fontSize: '28px' }} />
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text)' }}>Click to upload a document</div>
                           <div style={{ fontSize: '11px', color: 'var(--text3)' }}>PDF, Word, Excel, PowerPoint, CSV, TXT, ZIP…</div>
@@ -745,7 +766,13 @@ export default function CardEditor({ colName, cardTitle, cardData, setCardData, 
                 { id: 'divider', icon: '—', label: 'Divider', desc: 'Horizontal separator' }
               ].map(item => (
                 <div key={item.id} className="noteslite-slash-item" onClick={() => insertBlock(item.id)}>
-                  <div className="noteslite-slash-item-icon">{item.icon}</div>
+                  <div className="noteslite-slash-item-icon">
+                    {getEmojiAssetName(item.icon) ? (
+                      <EmojiIcon emoji={item.icon} label={item.label} />
+                    ) : (
+                      item.icon
+                    )}
+                  </div>
                   <div>
                     <div className="noteslite-slash-item-label">{item.label}</div>
                     <div className="noteslite-slash-item-desc">{item.desc}</div>
@@ -774,9 +801,9 @@ export default function CardEditor({ colName, cardTitle, cardData, setCardData, 
           onMouseLeave={() => setIsPanning(false)}
         >
           <div style={{ position: 'absolute', top: 24, right: 24, display: 'flex', gap: '12px', zIndex: 100000 }} onClick={e => e.stopPropagation()}>
-             <button onClick={() => setZoom(z => z + 0.25)} className="noteslite-tbtn" style={{background: '#222', color: '#fff', border: '1px solid #444'}}>➕ Zoom In</button>
-             <button onClick={() => setZoom(z => Math.max(0.25, z - 0.25))} className="noteslite-tbtn" style={{background: '#222', color: '#fff', border: '1px solid #444'}}>➖ Zoom Out</button>
-             <button onClick={() => setLightboxImage(null)} className="noteslite-tbtn" style={{background: '#222', color: '#fff', border: '1px solid #444'}}>❌ Close</button>
+             <button onClick={() => setZoom(z => z + 0.25)} className="noteslite-tbtn" style={{background: '#222', color: '#fff', border: '1px solid #444'}}><EmojiIcon emoji="➕" label="Zoom in" /> Zoom In</button>
+             <button onClick={() => setZoom(z => Math.max(0.25, z - 0.25))} className="noteslite-tbtn" style={{background: '#222', color: '#fff', border: '1px solid #444'}}><EmojiIcon emoji="➖" label="Zoom out" /> Zoom Out</button>
+             <button onClick={() => setLightboxImage(null)} className="noteslite-tbtn" style={{background: '#222', color: '#fff', border: '1px solid #444'}}><EmojiIcon emoji="❌" label="Close" /> Close</button>
           </div>
           <div 
             style={{ 

@@ -42,7 +42,7 @@ function buildNotes(): FloatingNote[] {
   });
 }
 
-export default function LoginAtmosphere() {
+export default function LoginAtmosphere({ showFloatingNotes = true }: { showFloatingNotes?: boolean }) {
   const [cursor, setCursor] = useState<{ x: number; y: number; visible: boolean }>({
     x: 0,
     y: 0,
@@ -119,27 +119,29 @@ export default function LoginAtmosphere() {
 
       <div className="auth-cursor-dot" style={{ left: cursor.x, top: cursor.y, opacity: cursor.visible ? 1 : 0 }} />
 
-      <div className="auth-floating-notes" aria-hidden="true">
-        {notes.map((note) => (
-          <article
-            key={note.id}
-            className="auth-floating-note"
-            style={{
-              left: note.left,
-              animationDuration: note.duration,
-              animationDelay: note.delay,
-              transform: `rotate(${note.rotation})`,
-            }}
-          >
-            <p className="auth-floating-note-title">{note.title}</p>
-            {note.lines.map((line) => (
-              <p key={`${note.id}-${line}`} className="auth-floating-note-line">
-                {line}
-              </p>
-            ))}
-          </article>
-        ))}
-      </div>
+      {showFloatingNotes ? (
+        <div className="auth-floating-notes" aria-hidden="true">
+          {notes.map((note) => (
+            <article
+              key={note.id}
+              className="auth-floating-note"
+              style={{
+                left: note.left,
+                animationDuration: note.duration,
+                animationDelay: note.delay,
+                transform: `rotate(${note.rotation})`,
+              }}
+            >
+              <p className="auth-floating-note-title">{note.title}</p>
+              {note.lines.map((line) => (
+                <p key={`${note.id}-${line}`} className="auth-floating-note-line">
+                  {line}
+                </p>
+              ))}
+            </article>
+          ))}
+        </div>
+      ) : null}
 
       <div className="auth-avatar-badge" aria-hidden="true">
         N

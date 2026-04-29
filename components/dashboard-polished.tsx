@@ -6,6 +6,7 @@ import { signOut, useSession } from "next-auth/react";
 import ProfileModal, { type ProfileSettings, type PasswordForm, type ApiKeyItem } from "./profile-modal";
 import PreferencesModal from "./preferences-modal";
 import QuickNotesView, { type QuickNote } from "./quick-notes";
+import EmojiIcon from "./emoji-icon";
 import LoadingScreen from "./loading-screen";
 import { useLoadingScreen } from "@/hooks/use-loading-screen";
 import { startTeleportLoading } from "@/lib/loading-screen";
@@ -1190,7 +1191,7 @@ export default function DashboardPolished() {
                   setMobileSidebarOpen(false);
                 }}
               >
-                <div className="sb-icon" style={{ background: "var(--accent-l)" }}>✎</div>
+                <EmojiIcon className="sb-icon" emoji="✎" label="Quick notes" />
                 <span className="sb-lbl">Quick Notes</span>
               </button>
 
@@ -1200,7 +1201,7 @@ export default function DashboardPolished() {
                 className={`sb-item ${view === "templates" && templateSubView === "todo" ? "active" : ""}`}
                 onClick={() => handleSidebarTemplateNav("todo")}
               >
-                <div className="sb-icon" style={{ background: "var(--accent-l)" }}>✓</div>
+                <EmojiIcon className="sb-icon" emoji="✓" label="To-do manager" />
                 <span className="sb-lbl">To-Do Manager</span>
                 <span className="tmpl-badge">tmpl</span>
               </button>
@@ -1209,7 +1210,7 @@ export default function DashboardPolished() {
                 className={`sb-item ${view === "templates" && templateSubView === "expense" ? "active" : ""}`}
                 onClick={() => handleSidebarTemplateNav("expense")}
               >
-                <div className="sb-icon" style={{ background: "var(--accent-l)" }}>₹</div>
+                <EmojiIcon className="sb-icon" emoji="₹" label="Expense tracker" />
                 <span className="sb-lbl">Expense Tracker</span>
                 <span className="tmpl-badge">tmpl</span>
               </button>
@@ -1218,7 +1219,7 @@ export default function DashboardPolished() {
                 className={`sb-item ${view === "templates" && templateSubView === "notes" ? "active" : ""}`}
                 onClick={() => handleSidebarTemplateNav("notes")}
               >
-                <div className="sb-icon" style={{ background: "var(--accent-l)" }}>✎</div>
+                <EmojiIcon className="sb-icon" emoji="✎" label="Notes manager" />
                 <span className="sb-lbl">Notes Manager</span>
                 <span className="tmpl-badge">tmpl</span>
               </button>
@@ -1233,7 +1234,7 @@ export default function DashboardPolished() {
                   onMouseEnter={() => router.prefetch(`/dashboard/${workspace.id}`)}
                   aria-busy={pendingWorkspaceIds.has(workspace.id)}
                 >
-                  <div className="sb-icon" style={{ background: "var(--accent-l)" }}>
+                  <div className="sb-icon">
                     <div className="ws-dot-sb" style={{ background: getThemeAccent(workspace.theme) }} />
                   </div>
                   <span className="sb-lbl">{workspace.name}</span>
@@ -1268,22 +1269,22 @@ export default function DashboardPolished() {
                   </div>
                   <div className="pd-section">
                     <button className="pd-item" type="button" onClick={() => { setProfileModalVisible(true); setProfileOpen(false); loadApiKeys(); }}>
-                      <div className="pd-item-icon">👤</div>
+                      <EmojiIcon className="pd-item-icon" emoji="👤" label="Profile" />
                       Profile Settings
                     </button>
                     <button className="pd-item" type="button" onClick={() => { setPreferencesModalVisible(true); setProfileOpen(false); }}>
-                      <div className="pd-item-icon">⚙️</div>
+                      <EmojiIcon className="pd-item-icon" emoji="⚙️" label="Preferences" />
                       Preferences
                     </button>
                     <button className="pd-item" type="button" onClick={() => { setToast("Keyboard shortcuts"); setProfileOpen(false); }}>
-                      <div className="pd-item-icon">⌨</div>
+                      <EmojiIcon className="pd-item-icon" emoji="⌨" label="Shortcuts" />
                       Shortcuts
                     </button>
                   </div>
                   <div className="pd-divider" />
                   <div className="pd-section" style={{ paddingTop: 4 }}>
                     <button className="pd-item danger" type="button" onClick={() => void signOut({ callbackUrl: "/auth/sign-in" })}>
-                      <div className="pd-item-icon">🚪</div>
+                      <EmojiIcon className="pd-item-icon" emoji="🚪" label="Sign out" />
                       Sign Out
                     </button>
                   </div>
@@ -1342,7 +1343,7 @@ export default function DashboardPolished() {
                       title={`${s.deviceName} - ${status}`}
                       style={isIdle ? { opacity: 0.5 } : {}}
                     >
-                      {icon}
+                      <EmojiIcon emoji={icon} label={isTablet ? "Tablet" : isDesktop ? "Desktop" : "Phone"} />
                     </div>
                   );
                 })}
@@ -1393,7 +1394,7 @@ export default function DashboardPolished() {
                   onClick={() => { setToast("No new notifications"); setNotifVisible(false); }}
                   title="Notifications"
                 >
-                  <span style={{ fontSize: "16px" }}>🔔</span>
+                  <EmojiIcon emoji="🔔" label="Notifications" style={{ fontSize: "16px" }} />
                   {notifVisible ? <div className="notif-badge" /> : null}
                 </button>
 
@@ -1432,8 +1433,6 @@ export default function DashboardPolished() {
                     <div className="stat-accent" style={{ background: "linear-gradient(90deg,#A06878,#C08898)" }} />
                     <div className="stat-label">Devices Synced</div>
                     <div className="stat-value">{isLoadingSessions ? "-" : sessions.length}</div>
-                    <div className="stat-sub">Last sync: now</div>
-                    <div className="stat-glyph">📱</div>
                   </div>
                 </div>
 
@@ -1503,10 +1502,10 @@ export default function DashboardPolished() {
                           {wsMenuOpenId === workspace.id && (
                             <div className="ws-card-menu" onClick={(e) => e.stopPropagation()}>
                               <button className="ws-card-menu-item" onClick={() => openEditWorkspace(workspace)}>
-                                ✏️ Edit
+                                <EmojiIcon emoji="✏️" label="Edit" /> Edit
                               </button>
                               <button className="ws-card-menu-item danger" onClick={() => { handleDeleteWorkspace(workspace.id); setWsMenuOpenId(null); }}>
-                                🗑️ Delete
+                                <EmojiIcon emoji="🗑️" label="Delete" /> Delete
                               </button>
                             </div>
                           )}
@@ -1577,7 +1576,7 @@ export default function DashboardPolished() {
                             style={{ opacity: isActiveNow ? 1 : 0.8 }}
                           >
                             <div className="device-item-icon">
-                              {icon}
+                              <EmojiIcon emoji={icon} label={isTablet ? "Tablet" : isDesktop ? "Desktop" : "Phone"} />
                               {isActiveNow && (
                                 <div
                                   className="device-active-dot"
@@ -1657,7 +1656,7 @@ export default function DashboardPolished() {
                           <div style={{ padding: "16px 12px", fontSize: 12, color: "var(--text3)", textAlign: "center" }}>No pinned notes yet</div>
                         ) : pinnedNotes.slice(0, 5).map((note) => (
                           <div key={note.id} className="quick-note" style={{ ["--nc" as string]: note.color, ["--nb" as string]: `${note.color}12`, cursor: "pointer" }} onClick={() => setView("quick-notes")}>
-                            <div className="qn-title">📌 {note.title}</div>
+                            <div className="qn-title"><EmojiIcon emoji="📌" label="Pinned" /> {note.title}</div>
                             {note.description ? note.description.slice(0, 60) + (note.description.length > 60 ? "..." : "") : "No description"}
                           </div>
                         ))}
@@ -1695,7 +1694,7 @@ export default function DashboardPolished() {
                         </div>
                       </div>
                       <div className="tmpl-body">
-                        <div className="tmpl-icon-wrap" style={{ background: `${template.accent}22` }}>{template.icon}</div>
+                        <EmojiIcon className="tmpl-icon-wrap" emoji={template.icon} label={template.title} />
                         <div className="tmpl-name">{template.title}</div>
                         <div className="tmpl-desc">{template.description}</div>
                         <div className="tmpl-footer">
@@ -1973,7 +1972,7 @@ export default function DashboardPolished() {
           line-height: 1.1;
         }
 
-        .brand-name em { font-style: normal; color: var(--accent); }
+        .brand-name em { font-style: normal; color: #eca7ad; }
 
         .brand-tag {
           font-size: 9px;
@@ -2061,15 +2060,6 @@ export default function DashboardPolished() {
         .sb-item:hover { background: var(--bg2); color: var(--text); }
         .sb-item.active { background: var(--accent-l); color: var(--text); }
 
-          background: var(--accent);
-        }
-
-        .sidebar.collapsed .sb-item.active::before {
-          top: 25%;
-          bottom: 25%;
-          width: 3.5px;
-        }
-
 
         .sb-icon {
           width: 28px;
@@ -2080,12 +2070,12 @@ export default function DashboardPolished() {
           align-items: center;
           justify-content: center;
           font-size: 13px;
-          background: var(--bg2);
+          background: transparent;
           transition: background 0.15s;
         }
 
         .sb-item.active .sb-icon,
-        .sb-item:hover .sb-icon { background: var(--surface2); }
+        .sb-item:hover .sb-icon { background: transparent; }
 
         .sb-lbl { overflow: hidden; transition: opacity 0.2s, max-width 0.2s; max-width: 160px; }
         .sidebar.collapsed .sb-lbl { opacity: 0; max-width: 0; pointer-events: none; }
@@ -2803,12 +2793,12 @@ export default function DashboardPolished() {
         .tmpl-icon-wrap {
           width: 36px;
           height: 36px;
-          border-radius: 10px;
           display: flex;
           align-items: center;
           justify-content: center;
           font-size: 18px;
           margin-bottom: 10px;
+          background: transparent;
         }
 
         .tmpl-name { font-family: "Syne", sans-serif; font-weight: 700; font-size: 13px; color: var(--text); margin-bottom: 4px; }

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { startTeleportLoading } from '@/lib/loading-screen';
+import EmojiIcon from '@/components/emoji-icon';
 import { ViewMode } from './NotesliteWorkspace';
 
 interface TopBarProps {
@@ -35,7 +36,7 @@ export default function TopBar({
       </button>
 
       <div className="noteslite-ws-title-area">
-        <span className="noteslite-ws-icon-btn" title="Change icon">📚</span>
+        <EmojiIcon className="noteslite-ws-icon-btn" emoji="📚" label="Workspace" />
         <span className="noteslite-ws-name">{workspaceName}</span>
         <span className="noteslite-ws-desc">{workspaceDesc}</span>
       </div>
@@ -55,7 +56,9 @@ export default function TopBar({
         </button>
       </div>
 
-      <button className="noteslite-tbtn" onClick={() => triggerToast('Search coming soon')}>🔍</button>
+      <button className="noteslite-tbtn" onClick={() => triggerToast('Search coming soon')} title="Search">
+        <EmojiIcon emoji="🔍" label="Search" />
+      </button>
       <button className="noteslite-tbtn" onClick={openColModal}>+ Column</button>
       <button className="noteslite-tbtn primary" onClick={openCardEditor}>+ Card</button>
     </div>

@@ -17,6 +17,7 @@ import ProfileModal, {
   type ProfileSettings,
 } from "@/components/profile-modal";
 import PreferencesModal from "@/components/preferences-modal";
+import EmojiIcon from "@/components/emoji-icon";
 import { useLoadingScreen } from "@/hooks/use-loading-screen";
 import { startTeleportLoading } from "@/lib/loading-screen";
 import { setTheme, type Theme } from "@/lib/theme";
@@ -47,11 +48,12 @@ function getDashboardScale() {
   return Math.min(widthRatio, heightRatio, 1);
 }
 
-function getHeadingSizeClass(title: string) {
-  if (title.length >= 13) return "text-[30px] tracking-[0.35px]";
-  if (title.length >= 10) return "text-[34px] tracking-[0.4px]";
-  if (title.length >= 8) return "text-[40px] tracking-[0.5px]";
-  return "text-[48px] tracking-[0.6px]";
+function getNotebookHeadingClass(title: string) {
+  if (title.length >= 16) return "text-[14px] tracking-[0.3px]";
+  if (title.length >= 13) return "text-[16px] tracking-[0.35px]";
+  if (title.length >= 10) return "text-[18px] tracking-[0.4px]";
+  if (title.length >= 7) return "text-[20px] tracking-[0.5px]";
+  return "text-[22px] tracking-[0.6px]";
 }
 
 const THEME_COLORS: Record<string, string> = {
@@ -896,7 +898,7 @@ export default function DashboardClient({
                   className="grid h-[78px] w-[78px] place-items-center rounded-full border border-[rgba(255,255,255,0.78)] bg-[radial-gradient(circle_at_30%_25%,#f2f2f2_0%,#dbdbdb_76%)] text-[26px] [box-shadow:0_12px_24px_rgba(87,78,69,0.24)] transition-[transform,box-shadow] duration-300 group-hover:-translate-y-0.5 group-hover:[box-shadow:0_16px_30px_rgba(87,78,69,0.28)]"
                   aria-hidden="true"
                 >
-                  ⚙️
+                  <EmojiIcon emoji="⚙️" label="Preferences" />
                 </span>
                 <span>Preferences</span>
               </button>
@@ -915,10 +917,12 @@ export default function DashboardClient({
                 </p>
               </div>
 
-              <div className="grid grid-cols-3 gap-x-[62px] gap-y-[66px]">
+              <div className="grid grid-cols-3 gap-x-[60px] gap-y-[76px]">
                 {workspaces.map((ws, index) => (
-                  <article
+                  <div
                     key={ws.id}
+                    className="group relative cursor-pointer [animation:cardRiseIn_680ms_cubic-bezier(0.2,1,0.3,1)_both] motion-reduce:animate-none"
+                    style={{ animationDelay: `${index * 90 + 80}ms`, height: "310px" }}
                     onClick={() => openWorkspace(ws)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") {
@@ -929,44 +933,91 @@ export default function DashboardClient({
                     tabIndex={0}
                     role="button"
                     aria-label={`Open ${ws.name} workspace`}
-                    className="group relative h-[262px] cursor-pointer overflow-hidden rounded-[24px] border-2 border-[rgba(255,255,255,0.8)] bg-[#cfd2d9] bg-cover bg-center [box-shadow:0_16px_22px_rgba(47,43,40,0.42)] [animation:cardRiseIn_680ms_cubic-bezier(0.2,1,0.3,1)_both] transform-gpu will-change-transform transition-[transform,box-shadow,filter] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1 hover:scale-[1.01] hover:[box-shadow:0_20px_26px_rgba(47,43,40,0.38)] after:pointer-events-none after:absolute after:inset-0 after:bg-[linear-gradient(180deg,rgba(255,255,255,0.08)_0%,rgba(0,0,0,0.18)_100%)] motion-reduce:animate-none"
-                    style={{
-                      ...getThemeBackground(ws.theme),
-                      animationDelay: `${index * 90 + 80}ms`,
-                    }}
                   >
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setEditingId(ws.id);
+                    {/* Page 3 — farthest back (extends 10px right + down) */}
+                    <div
+                      style={{
+                        position: "absolute", top: 10, left: 10, right: -10, bottom: -10,
+                        borderRadius: 22, zIndex: 0, overflow: "hidden",
+                        border: "1px solid rgba(255,255,255,0.45)",
+                        boxShadow: "0 6px 14px rgba(47,43,40,0.16)",
+                        ...getThemeBackground(ws.theme),
                       }}
-                      className="absolute right-[8px] top-[8px] z-[5] grid h-8 w-8 place-items-center rounded-full border border-[rgba(255,255,255,0.62)] bg-[rgba(238,241,246,0.72)] text-[13px] leading-none tracking-[-1px] text-[rgba(88,91,99,0.95)] transition-colors duration-300 hover:bg-[rgba(255,255,255,0.9)]"
-                      aria-label={`Edit ${ws.name} workspace`}
                     >
-                      ...
-                    </button>
-
-                    <div className="absolute inset-[30px] z-[1] overflow-hidden rounded-[28px] border-[3px] border-[rgba(255,255,255,0.62)] bg-[rgba(238,241,246,0.68)] px-[8px] transition-colors duration-500 group-hover:bg-[rgba(244,247,252,0.72)]">
-                      <h2
-                        className={`mt-[10px] w-full text-center leading-none font-medium whitespace-nowrap uppercase text-[rgba(88,91,99,0.88)] transition-transform duration-500 group-hover:-translate-y-0.5 [font-family:'Cinzel','Times_New_Roman',serif] ${getHeadingSizeClass(ws.name)}`}
-                      >
-                        {ws.name}
-                      </h2>
-                      {ws._count ? (
-                        <p className="mt-3 text-center text-[11px] uppercase tracking-[0.1em] text-[rgba(88,91,99,0.6)]">
-                          {ws._count.cards} cards · {ws._count.columns} columns
-                        </p>
-                      ) : null}
+                      <div style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,0.52)" }} />
                     </div>
-                  </article>
+                    {/* Page 2 — middle (extends 5px right + down) */}
+                    <div
+                      style={{
+                        position: "absolute", top: 5, left: 5, right: -5, bottom: -5,
+                        borderRadius: 22, zIndex: 1, overflow: "hidden",
+                        border: "1px solid rgba(255,255,255,0.52)",
+                        boxShadow: "0 9px 18px rgba(47,43,40,0.22)",
+                        ...getThemeBackground(ws.theme),
+                      }}
+                    >
+                      <div style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,0.3)" }} />
+                    </div>
+
+                    {/* Main card */}
+                    <div
+                      className="transform-gpu will-change-transform transition-[transform,box-shadow] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:-translate-y-2 group-hover:[box-shadow:0_22px_34px_rgba(47,43,40,0.38)] motion-reduce:transition-none"
+                      style={{
+                        position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+                        borderRadius: 22, overflow: "hidden", zIndex: 2,
+                        border: "1px solid rgba(255,255,255,0.62)",
+                        boxShadow: "0 14px 26px rgba(47,43,40,0.42)",
+                        display: "flex", flexDirection: "column",
+                        ...getThemeBackground(ws.theme),
+                      }}
+                    >
+                      {/* Edit button */}
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setEditingId(ws.id);
+                        }}
+                        className="absolute right-[9px] top-[9px] z-[5] grid h-7 w-7 place-items-center rounded-full border border-[rgba(255,255,255,0.55)] bg-[rgba(238,241,246,0.72)] text-[13px] leading-none tracking-[-1px] text-[rgba(88,91,99,0.9)] transition-colors duration-300 hover:bg-[rgba(255,255,255,0.9)]"
+                        aria-label={`Edit ${ws.name} workspace`}
+                      >
+                        ...
+                      </button>
+
+                      {/* White pill header */}
+                      <div style={{ margin: "14px 12px 8px", background: "white", borderRadius: 12, padding: "10px 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.08)", flexShrink: 0 }}>
+                        <h2
+                          className={`font-extrabold uppercase leading-none text-[#1a1714] [font-family:'Cinzel','Times_New_Roman',serif] ${getNotebookHeadingClass(ws.name)}`}
+                        >
+                          {ws.name}
+                        </h2>
+                      </div>
+
+                      {/* White preview body */}
+                      <div style={{ flex: 1, margin: "0 12px", background: "white", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "inset 0 1px 3px rgba(0,0,0,0.04)" }}>
+                        <span style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.2em", color: "rgba(160,148,138,0.65)" }}>
+                          Preview of boards
+                        </span>
+                      </div>
+
+                      {/* Footer — on the colored card background */}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", flexShrink: 0 }}>
+                        <span style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(40,28,22,0.55)" }}>
+                          {ws._count
+                            ? `${ws._count.cards} cards · ${ws._count.columns} cols`
+                            : "? cards · ? cols"}
+                        </span>
+                        <div style={{ width: 9, height: 9, borderRadius: "50%", background: "rgba(60,40,30,0.38)" }} />
+                      </div>
+                    </div>
+                  </div>
                 ))}
 
                 <button
                   type="button"
                   onClick={() => void createWorkspace()}
                   disabled={isCreating}
-                  className="group grid h-[262px] place-items-center rounded-[24px] bg-[#ececee] text-[120px] leading-none text-[#6f7279] [box-shadow:0_16px_22px_rgba(47,43,40,0.28)] [animation:cardRiseIn_680ms_cubic-bezier(0.2,1,0.3,1)_both] transition-[transform,box-shadow] duration-500 hover:-translate-y-1.5 hover:scale-[1.01] hover:[box-shadow:0_22px_30px_rgba(47,43,40,0.34)] [font-family:'Cormorant_Garamond','Times_New_Roman',serif] motion-reduce:animate-none disabled:cursor-not-allowed disabled:opacity-70"
+                  className="group grid h-[296px] place-items-center rounded-[24px] bg-[#ececee] text-[120px] leading-none text-[#6f7279] [box-shadow:0_16px_22px_rgba(47,43,40,0.28)] [animation:cardRiseIn_680ms_cubic-bezier(0.2,1,0.3,1)_both] transition-[transform,box-shadow] duration-500 hover:-translate-y-1.5 hover:scale-[1.01] hover:[box-shadow:0_22px_30px_rgba(47,43,40,0.34)] [font-family:'Cormorant_Garamond','Times_New_Roman',serif] motion-reduce:animate-none disabled:cursor-not-allowed disabled:opacity-70"
                   style={{ animationDelay: `${workspaces.length * 90 + 80}ms` }}
                   aria-label="Add workspace"
                 >
