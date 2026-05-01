@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 
-import { getCurrentUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { broadcast } from "@/lib/sse";
+import { getCurrentUser } from "@/backend/lib/auth";
+import { prisma } from "@/backend/lib/prisma";
+import { broadcast } from "@/backend/lib/sse";
 
 type RouteContext = {
   params: Promise<{ id: string }>;

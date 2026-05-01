@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { verifyPassword, hashPassword } from "@/lib/password";
+import { authOptions } from "@/backend/lib/auth";
+import { prisma } from "@/backend/lib/prisma";
+import { verifyPassword, hashPassword } from "@/backend/lib/password";
 
 export async function PATCH(req: Request) {
   try {

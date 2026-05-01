@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import WorkspaceBoardPageShell from "@/components/workspace-board-page-shell";
+import { getCurrentUser } from "@/backend/lib/auth";
+import { prisma } from "@/backend/lib/prisma";
+import WorkspaceBoardPageShell from "@/frontend/components/workspace-board-page-shell";
 
 type WorkspaceBoardPageProps = {
   params: Promise<{ workspaceId: string }>;

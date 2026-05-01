@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import AppProviders from "@/components/app-providers";
+import AppProviders from "@/frontend/components/app-providers";
 
 import "./globals.css";
 
@@ -10,8 +10,8 @@ export const metadata: Metadata = {
 };
 
 import { cookies } from "next/headers";
-import { getCurrentUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/backend/lib/auth";
+import { prisma } from "@/backend/lib/prisma";
 
 export default async function RootLayout({
   children,
