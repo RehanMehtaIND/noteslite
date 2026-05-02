@@ -1,7 +1,13 @@
 import { prisma } from "@/backend/lib/prisma";
 import { NextResponse } from "next/server";
+import { getCurrentUser } from "@/backend/lib/auth";
 
 export async function GET() {
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthenticated." }, { status: 401 });
+  }
+
   try {
     // Attempt to count users to verify the DB connection
     const userCount = await prisma.user.count();

@@ -30,8 +30,6 @@ export async function GET() {
     };
 
     return NextResponse.json(payload);
-
-    return NextResponse.json(dbUser);
   } catch (error) {
     console.error("Failed to fetch profile settings:", error);
     return NextResponse.json({ error: "Failed to fetch profile settings" }, { status: 500 });
