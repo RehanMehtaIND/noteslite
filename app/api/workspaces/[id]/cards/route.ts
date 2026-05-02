@@ -69,10 +69,11 @@ export async function POST(req: Request, context: RouteContext) {
       include: { tags: true },
     });
 
+    const tempId = req.headers.get("x-client-temp-id") || undefined
     const clientId = req.headers.get("x-client-id") || undefined;
-    broadcast(workspaceId, "card:created", card, clientId);
+    broadcast(workspaceId, "card:created", {card, tempId}, clientId);
 
-    return NextResponse.json({ card }, { status: 201 });
+    return NextResponse.json({ card, tempId }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
       const msg = error.issues[0]?.message ?? "Invalid card payload.";

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useWorkspaceSync } from '@/frontend/hooks/use-workspace-sync';
 import './workspace.css';
 import { CV_SEED, CV_CONNECTIONS, INITIAL_CARD_DATA } from './data';
@@ -28,6 +28,19 @@ function getColumnColor(name: string) {
   if (lower.includes("published")) return "#7986CB";
 
   return "#C07850";
+}
+
+function makeTempId() {
+  const rand = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+  return `tmp_${rand}`;
+}
+
+function makeClientId() {
+  return typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `client-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 }
 
 export default function NotesliteWorkspace({ initialData, workspaceId }: { initialData?: any; workspaceId?: string }) {
@@ -61,12 +74,16 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
     };
   });
 
-  const clientId = useMemo(() => {
-    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-      return crypto.randomUUID();
-    }
-    return `client-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  }, []);
+  const clientId = useMemo(() => makeClientId(), []);
+
+  // Maps tempId → pending edit payload to flush once the real ID arrives
+  const pendingEditsRef = useRef<Map<string, { content: any[]; title?: string }>>(new Map());
+  // Tracks the card ID currently open in the editor (always up-to-date, safe in timeouts)
+  const currentEditorCardIdRef = useRef<string>('');
+  // Set of tempIds whose create request is still in-flight
+  const pendingTempIdsRef = useRef<Set<string>>(new Set());
+
+  // ─── Workspace load ───────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -117,8 +134,6 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
         setColumns(newColumns);
         setCardsData(newCardsData);
         setCanvasItems(prev => {
-          // If we have items that aren't columns, keep them. 
-          // For columns, merge data from newColumns (especially cards) but keep x,y,w,h,z if they existed.
           const nonCols = prev.filter(i => i.type !== 'column');
           const mergedCols = newColumns.map((nc: any) => {
             const existing = prev.find(p => p.id === nc.id && p.type === 'column');
@@ -137,6 +152,15 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
     return () => { cancelled = true; };
   }, [workspaceId]);
 
+  // Keep the ref in sync with the editor's current card ID
+  const [editorData, setEditorData] = useState<{ colName: string, cardTitle: string } | null>(null);
+
+  useEffect(() => {
+    currentEditorCardIdRef.current = editorData?.cardTitle ?? '';
+  }, [editorData?.cardTitle]);
+
+  // ─── SSE sync ────────────────────────────────────────────────────────────────
+
   useWorkspaceSync(workspaceId || "", clientId, {
     onCardCreated: (card: any) => {
       setCardsData(prev => {
@@ -152,16 +176,24 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
         };
       });
       setColumns(prev => prev.map(col => {
-        if (col.id === card.columnId && !col.cards?.includes(card.id)) {
-          return { ...col, cards: [...(col.cards || []), card.id] };
-        }
-        return col;
+        if (col.id !== card.columnId) return col;
+        if (col.cards?.includes(card.id)) return col; // real ID already present
+
+        // A temp card we created is sitting in this column — resolveCardId will swap it.
+        // Adding the real ID here would create a duplicate, so skip.
+        const hasPendingTemp = (col.cards || []).some(
+          (c: string) => pendingTempIdsRef.current.has(c)
+        );
+        if (hasPendingTemp) return col;
+
+        return { ...col, cards: [...(col.cards || []), card.id] };
       }));
       setCanvasItems(prev => prev.map(i => {
-        if (i.id === card.columnId && i.type === 'column' && !i.cards?.includes(card.id)) {
-          return { ...i, cards: [...(i.cards || []), card.id] };
-        }
-        return i;
+        if (i.id !== card.columnId || i.type !== 'column') return i;
+        if (i.cards?.includes(card.id)) return i;
+        const hasPendingTemp = (i.cards || []).some((c: string) => pendingTempIdsRef.current.has(c));
+        if (hasPendingTemp) return i;
+        return { ...i, cards: [...(i.cards || []), card.id] };
       }));
     },
     onCardUpdated: (card: any) => {
@@ -192,11 +224,11 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
     }
   });
 
+  // ─── Helpers ─────────────────────────────────────────────────────────────────
+
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
   const [isColModalOpen, setIsColModalOpen] = useState(false);
-
-  const [editorData, setEditorData] = useState<{ colName: string, cardTitle: string } | null>(null);
 
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
@@ -216,15 +248,82 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
     setActiveScreen('editor');
   };
 
+  // ─── Temp-ID resolution ───────────────────────────────────────────────────────
+  // Called once the server responds with the real UUID. Atomically swaps the
+  // temporary client-side ID for the real one everywhere in state, then flushes
+  // any edits the user made while the request was in-flight.
+
+  const resolveCardId = useCallback((tempId: string, realId: string) => {
+    pendingTempIdsRef.current.delete(tempId);
+    setCardsData(prev => {
+      if (!prev[tempId]) return prev;
+      const { [tempId]: cardData, ...rest } = prev;
+      return { ...rest, [realId]: { ...cardData, id: realId } };
+    });
+    setColumns(prev => prev.map(col => {
+      const mapped = (col.cards || []).map((c: string) => c === tempId ? realId : c);
+      const seen = new Set<string>();
+      return { ...col, cards: mapped.filter((c: string) => !seen.has(c) && (seen.add(c), true)) };
+    }));
+    setCanvasItems(prev => prev.map(item => {
+      const mapped = (item.cards || []).map((c: string) => c === tempId ? realId : c);
+      const seen = new Set<string>();
+      return { ...item, cards: mapped.filter((c: string) => !seen.has(c) && (seen.add(c), true)) };
+    }));
+    setEditorData(prev => {
+      if (prev?.cardTitle === tempId) return { ...prev, cardTitle: realId };
+      return prev;
+    });
+    if (currentEditorCardIdRef.current === tempId) {
+      currentEditorCardIdRef.current = realId;
+    }
+
+    // Flush any edits queued while the create request was in-flight
+    const pending = pendingEditsRef.current.get(tempId);
+    if (pending && workspaceId) {
+      pendingEditsRef.current.delete(tempId);
+      fetch(`/api/workspaces/${workspaceId}/cards/${realId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-client-id': clientId },
+        body: JSON.stringify(pending)
+      }).catch(console.error);
+    }
+  }, [workspaceId, clientId]);
+
+  // ─── Save helper (used on close) ─────────────────────────────────────────────
+
+  const flushSave = useCallback((cardId: string, data: any) => {
+    if (!workspaceId || !cardId || cardId.startsWith('tmp_')) return;
+    const firstTextBlock = data?.blocks?.find((b: any) => ['p', 'h1', 'h2', 'h3'].includes(b.t) && b.v)?.v;
+    fetch(`/api/workspaces/${workspaceId}/cards/${cardId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'x-client-id': clientId },
+      body: JSON.stringify({ content: data?.blocks, title: data?.title || firstTextBlock })
+    }).catch(console.error);
+  }, [workspaceId, clientId]);
+
+  // ─── Editor close: cancel debounce and save immediately ─────────────────────
+
   const closeEditor = () => {
+    if ((window as any)._saveTimeout) {
+      clearTimeout((window as any)._saveTimeout);
+      (window as any)._saveTimeout = null;
+    }
+    const cardId = currentEditorCardIdRef.current;
+    if (cardId) {
+      flushSave(cardId, cardsData[cardId]);
+    }
     setActiveScreen('ws');
     setEditorData(null);
+    currentEditorCardIdRef.current = '';
   };
+
+  // ─── Column CRUD ─────────────────────────────────────────────────────────────
 
   const handleAddColumn = async (name: string, desc: string, color: string) => {
     if (!workspaceId) {
       const newCol = {
-        id: 'col-' + Math.random().toString(36).substr(2, 6),
+        id: 'col-' + Math.random().toString(36).slice(2, 8),
         type: 'column',
         x: 50, y: 50, w: 232,
         color, title: name, desc, cards: [], z: 99
@@ -258,6 +357,8 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
     }
   };
 
+  // ─── Card CRUD ───────────────────────────────────────────────────────────────
+
   const handleAddCard = async (colId?: string) => {
     const targetColId = colId || columns[0]?.id;
 
@@ -266,33 +367,56 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
       return;
     }
 
-    const title = `New Card ${Math.floor(Math.random() * 1000)}`;
+    const title = 'Untitled';
+    const initialBlocks = [{ t: 'h1', v: title }, { t: 'p', v: '' }];
 
+    // ── Local-only mode (no workspace) ────────────────────────────────────────
     if (!workspaceId) {
-      const newId = title;
+      const newId = `local-${Date.now()}`;
       setCardsData(prev => ({
         ...prev,
         [newId]: {
           icon: '📄', coverA: '#7A9ABB', coverB: '#9ABACB', tags: [],
-          blocks: [{ t: 'h1', v: title }, { t: 'p', v: '' }]
+          blocks: initialBlocks
         }
       }));
       setColumns(prev => {
-        const newColumns = [...prev];
-        const targetIdx = targetColId ? newColumns.findIndex(c => c.id === targetColId) : 0;
-        if (targetIdx !== -1) {
-          newColumns[targetIdx] = { ...newColumns[targetIdx], cards: [...(newColumns[targetIdx].cards || []), newId] };
-        }
-        return newColumns;
+        const cols = [...prev];
+        const idx = cols.findIndex(c => c.id === targetColId);
+        if (idx !== -1) cols[idx] = { ...cols[idx], cards: [...(cols[idx].cards || []), newId] };
+        return cols;
       });
-      const colName = targetColId ? columns.find(c => c.id === targetColId)?.title : columns[0]?.title;
+      const colName = columns.find(c => c.id === targetColId)?.title || columns[0]?.title;
       setCanvasItems(prev => prev.map(i => i.id === targetColId ? { ...i, cards: [...(i.cards || []), newId] } : i));
       if (colName) openCardEditor(colName, newId);
       return;
     }
 
+    // ── Workspace mode: open editor immediately with a temp ID ────────────────
+    const tempId = makeTempId();
+    pendingTempIdsRef.current.add(tempId);
+    const colName = columns.find(c => c.id === targetColId)?.title || '';
+
+    setCardsData(prev => ({
+      ...prev,
+      [tempId]: {
+        id: tempId,
+        icon: '📄', coverA: '#7A9ABB', coverB: '#9ABACB', tags: [],
+        blocks: initialBlocks,
+        title
+      }
+    }));
+    setColumns(prev => {
+      const cols = [...prev];
+      const idx = cols.findIndex(c => c.id === targetColId);
+      if (idx !== -1) cols[idx] = { ...cols[idx], cards: [...(cols[idx].cards || []), tempId] };
+      return cols;
+    });
+    setCanvasItems(prev => prev.map(i => i.id === targetColId ? { ...i, cards: [...(i.cards || []), tempId] } : i));
+    if (colName) openCardEditor(colName, tempId);
+
+    // Fire the create request in the background; swap IDs on success
     try {
-      const initialBlocks = [{ t: 'h1', v: title }, { t: 'p', v: '' }];
       const response = await fetch(`/api/workspaces/${workspaceId}/cards`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-client-id": clientId },
@@ -301,53 +425,63 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
 
       if (!response.ok) throw new Error("Failed to create card");
       const { card } = await response.json();
-
-      const newId = card.id;
-
-      setCardsData(prev => ({
-        ...prev,
-        [newId]: {
-          id: newId,
-          icon: '📄', coverA: '#7A9ABB', coverB: '#9ABACB', tags: [],
-          blocks: initialBlocks,
-          title: title
-        }
-      }));
-      setColumns(prev => {
-        const newColumns = [...prev];
-        const targetIdx = targetColId ? newColumns.findIndex(c => c.id === targetColId) : 0;
-        if (targetIdx !== -1) {
-          newColumns[targetIdx] = { ...newColumns[targetIdx], cards: [...(newColumns[targetIdx].cards || []), newId] };
-        }
-        return newColumns;
-      });
-
-      const colName = targetColId ? columns.find(c => c.id === targetColId)?.title : columns[0]?.title;
-      setCanvasItems(prev => prev.map(i => i.id === targetColId ? { ...i, cards: [...(i.cards || []), newId] } : i));
-      if (colName) openCardEditor(colName, newId);
+      resolveCardId(tempId, card.id);
     } catch (err) {
       console.error(err);
+      pendingTempIdsRef.current.delete(tempId);
+      // Roll back the optimistic card
+      setCardsData(prev => { const { [tempId]: _, ...rest } = prev; return rest; });
+      setColumns(prev => prev.map(col => ({
+        ...col,
+        cards: (col.cards || []).filter((c: string) => c !== tempId)
+      })));
+      setCanvasItems(prev => prev.map(i => ({
+        ...i,
+        cards: (i.cards || []).filter((c: string) => c !== tempId)
+      })));
+      triggerToast("Failed to create card");
     }
   };
 
-  const handleDeleteCard = (cardTitle: string) => {
+  const handleDeleteCard = (cardId: string) => {
+    // Cancel any pending debounced save and prevent flushSave in closeEditor
+    if ((window as any)._saveTimeout) {
+      clearTimeout((window as any)._saveTimeout);
+      (window as any)._saveTimeout = null;
+    }
+    currentEditorCardIdRef.current = '';
+
+    // Clean up temp-ID tracking if still in-flight
+    if (cardId.startsWith('tmp_')) {
+      pendingTempIdsRef.current.delete(cardId);
+      pendingEditsRef.current.delete(cardId);
+    }
+
+    // Optimistic removal from all state
     setColumns(prev => prev.map(col => ({
       ...col,
-      cards: (col.cards || []).filter((c: string) => c !== cardTitle)
+      cards: (col.cards || []).filter((c: string) => c !== cardId)
     })));
-    setCanvasItems(prev => prev.map(item => {
-      if (item.type === 'column') {
-        return { ...item, cards: (item.cards || []).filter((c: string) => c !== cardTitle) };
-      }
-      return item;
-    }));
+    setCanvasItems(prev => prev.map(item => ({
+      ...item,
+      cards: (item.cards || []).filter((c: string) => c !== cardId)
+    })));
     setCardsData(prev => {
       const next = { ...prev };
-      delete next[cardTitle];
+      delete next[cardId];
       return next;
     });
+
     closeEditor();
-    triggerToast(`Card "${cardTitle}" deleted`);
+    triggerToast('Card deleted');
+
+    // Temp cards haven't been persisted yet — no API call needed
+    if (!workspaceId || cardId.startsWith('tmp_')) return;
+
+    fetch(`/api/workspaces/${workspaceId}/cards/${cardId}`, {
+      method: 'DELETE',
+      headers: { 'x-client-id': clientId },
+    }).catch(err => console.error('Failed to delete card:', err));
   };
 
   const handleDeleteColumn = (colId: string) => {
@@ -426,6 +560,8 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
     });
   };
 
+  // ─── Render ───────────────────────────────────────────────────────────────────
+
   return (
     <div className="noteslite-workspace-container">
       {/* SCREEN 1 — WORKSPACE */}
@@ -473,6 +609,7 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
                 }
               }}
               cardsData={cardsData}
+              handleAddCard={handleAddCard}
             />
           )}
         </div>
@@ -489,11 +626,22 @@ export default function NotesliteWorkspace({ initialData, workspaceId }: { initi
               setCardsData(prev => ({ ...prev, [editorData.cardTitle]: data }));
 
               if (workspaceId) {
-                // Debounce patching
+                const cardId = editorData.cardTitle;
+
+                // Card not yet persisted — queue edit to flush once real ID arrives
+                if (cardId.startsWith('tmp_')) {
+                  const firstTextBlock = data.blocks?.find((b: any) => ['p', 'h1', 'h2', 'h3'].includes(b.t) && b.v)?.v;
+                  pendingEditsRef.current.set(cardId, { content: data.blocks, title: data.title || firstTextBlock });
+                  return;
+                }
+
+                // Debounce save for real cards
                 if ((window as any)._saveTimeout) clearTimeout((window as any)._saveTimeout);
                 (window as any)._saveTimeout = setTimeout(() => {
+                  const latestCardId = currentEditorCardIdRef.current;
+                  if (!latestCardId || latestCardId.startsWith('tmp_')) return;
                   const firstTextBlock = data.blocks?.find((b: any) => ['p', 'h1', 'h2', 'h3'].includes(b.t) && b.v)?.v;
-                  fetch(`/api/workspaces/${workspaceId}/cards/${editorData.cardTitle}`, {
+                  fetch(`/api/workspaces/${workspaceId}/cards/${latestCardId}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json', 'x-client-id': clientId },
                     body: JSON.stringify({ content: data.blocks, title: data.title || firstTextBlock })

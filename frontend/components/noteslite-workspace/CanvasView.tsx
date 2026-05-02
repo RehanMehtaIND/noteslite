@@ -9,9 +9,10 @@ interface CanvasViewProps {
   columns: any[];
   onDeleteItem: (id: string) => void;
   cardsData: Record<string, any>;
+  handleAddCard: (colId: string) => void;
 }
 
-export default function CanvasView({ items, setItems, connections, triggerToast, openCardEditor, columns, onDeleteItem, cardsData }: CanvasViewProps) {
+export default function CanvasView({ items, setItems, connections, triggerToast, openCardEditor, columns, onDeleteItem, cardsData, handleAddCard }: CanvasViewProps) {
   const frameRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const [cam, setCam] = useState({ x: 0, y: 0 });
@@ -247,6 +248,14 @@ export default function CanvasView({ items, setItems, connections, triggerToast,
                 </div>
               );
             })}
+            <div
+              className="noteslite-cv-card-pill"
+              style={{ color: 'var(--text3)', borderStyle: 'dashed', opacity: 0.7 }}
+              onPointerDown={e => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); handleAddCard(item.id); }}
+            >
+              + Add card
+            </div>
           </div>
           {toolbar}
         </>
