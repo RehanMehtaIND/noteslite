@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getAuthUser } from "@/lib/api-key-auth";
-import { prisma } from "@/lib/prisma";
+import { getAuthUser } from "@/backend/lib/api-key-auth";
+import { prisma } from "@/backend/lib/prisma";
 import { z } from "zod";
 
 export async function GET(req: Request) {

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { prisma } from "@/lib/prisma";
-import { hashPassword } from "@/lib/password";
+import { prisma } from "@/backend/lib/prisma";
+import { hashPassword } from "@/backend/lib/password";
 
 const signUpSchema = z.object({
   name: z.string().trim().min(2).max(80),

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import LoginAtmosphere from "@/components/auth/login-atmosphere";
+import LoginAtmosphere from "@/frontend/components/auth/login-atmosphere";
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (

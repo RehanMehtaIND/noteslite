@@ -1,7 +1,7 @@
 
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/backend/lib/auth";
+import { prisma } from "@/backend/lib/prisma";
 import { z } from "zod";
 
 export async function GET() {
@@ -30,8 +30,6 @@ export async function GET() {
     };
 
     return NextResponse.json(payload);
-
-    return NextResponse.json(dbUser);
   } catch (error) {
     console.error("Failed to fetch profile settings:", error);
     return NextResponse.json({ error: "Failed to fetch profile settings" }, { status: 500 });

@@ -1,8 +1,4 @@
-# Ignore old project versions
-backend/
-frontend/
-
-# Ignore scratch files
+# Scratch / test files
 scratch/
 test-prisma.ts
 eslint_report.json
@@ -10,5 +6,6 @@ eslint_report.json
 # Standard ignores
 node_modules
 .next
+.next-dev
 .env
 .env.*.local

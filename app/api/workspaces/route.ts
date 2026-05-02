@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getAuthUser } from "@/lib/api-key-auth";
-import { prisma } from "@/lib/prisma";
+import { getAuthUser } from "@/backend/lib/api-key-auth";
+import { prisma } from "@/backend/lib/prisma";
 
 const createWorkspaceSchema = z.object({
   name: z.string().trim().min(1).max(120),
